@@ -426,11 +426,10 @@ def registrar_evento_tryon(request):
 @csrf_exempt
 def procesar_ia_tryon(request):
     """
-    Procesa la IA (Replicate/HuggingFace) Y REGISTRA EL EVENTO PARA BI.
+    Procesa la IA (Replicate) de forma segura y REGISTRA EL EVENTO PARA BI.
     """
     if request.method == 'POST':
         try:
-            import json
             data = json.loads(request.body)
             
             # Datos para la IA
@@ -438,29 +437,48 @@ def procesar_ia_tryon(request):
             imagen_prenda = data.get('imagen_prenda')
             categoria = data.get('categoria', 'upper_body')
             
-            # 1. EJECUTAR IA (Tu código de Replicate o Simulación aquí)
-            # ... (Aquí va tu lógica de os.environ y replicate.run) ...
-            # Supongamos que 'final_image_url' es el resultado de la IA
+            # -----------------------------------------------------------
+            # 1. SEGURIDAD: CONEXIÓN CON RENDER (La corrección clave)
+            # -----------------------------------------------------------
+            # En lugar de escribir la clave aquí, le pedimos a Render que nos la de.
+            api_token = os.environ.get('REPLICATE_API_TOKEN')
             
-            # (Si estás usando simulación o Replicate, asegúrate que 'final_image_url' tenga valor aquí)
-            # Para este ejemplo, pongo la lógica de Replicate resumida:
-            os.environ["REPLICATE_API_TOKEN"] = 'CLAVE_EN_RENDER'
-            output = replicate.run(
+            if not api_token:
+                # Si esto pasa, es porque olvidamos poner la variable en el panel de Render
+                return JsonResponse({'status': 'error', 'message': 'Falta configurar el Token en el servidor'}, status=500)
+
+            # Inicializamos el cliente con la clave segura
+            client = replicate.Client(api_token=api_token)
+
+            # -----------------------------------------------------------
+            # 2. EJECUTAR IA (Tu modelo específico)
+            # -----------------------------------------------------------
+            output = client.run(
                 "cuuupid/idm-vton:c871bb9b046607b680449ecbae55fd8c6d945e0a1948644bf2361b3d021d3ff4",
-                input={"human_img": imagen_usuario, "garm_img": imagen_prenda, "garment_des": "clothing", "category": categoria, "crop": False, "seed": 42, "steps": 30}
+                input={
+                    "human_img": imagen_usuario, 
+                    "garm_img": imagen_prenda, 
+                    "garment_des": "clothing", 
+                    "category": categoria, 
+                    "crop": False, 
+                    "seed": 42, 
+                    "steps": 30
+                }
             )
+            
+            # Replicate devuelve una lista o un string, aseguramos que sea string url
             final_image_url = str(output[0] if isinstance(output, list) else output)
 
-            # --- 2. GUARDAR EL REGISTRO BI (¡ESTO FALTABA!) ---
+            # -----------------------------------------------------------
+            # 3. GUARDAR EL REGISTRO BI (Tu lógica intacta)
+            # -----------------------------------------------------------
             try:
-                prod_id = data.get('producto_id') # Recibimos el ID del HTML
+                prod_id = data.get('producto_id')
                 if prod_id:
                     producto_obj = Producto.objects.get(id=prod_id)
                     
-                    # Si el usuario no está logueado, guardamos como anónimo (None)
                     usuario_log = request.user if request.user.is_authenticated else None
                     
-                    # CREAR EL REGISTRO EN LA BASE DE DATOS
                     RegistroTryOn.objects.create(
                         producto=producto_obj,
                         usuario=usuario_log
@@ -468,16 +486,15 @@ def procesar_ia_tryon(request):
                     print(f"✅ BI Registrado: Se probó {producto_obj.nombre}")
             except Exception as e:
                 print(f"⚠️ Error guardando BI: {e}")
-            # --------------------------------------------------
+                # No detenemos el proceso si falla el BI, solo avisamos en consola
 
             return JsonResponse({'status': 'success', 'imagen_generada': final_image_url})
 
         except Exception as e:
-            print(f"❌ Error: {str(e)}")
-            return JsonResponse({'status': 'error', 'message': f'Error: {str(e)}'})
+            print(f"❌ Error CRÍTICO en IA: {str(e)}")
+            return JsonResponse({'status': 'error', 'message': f'Error interno: {str(e)}'}, status=500)
 
-    return JsonResponse({'status': 'error', 'message': 'Método no permitido'})
-
+    return JsonResponse({'status': 'error', 'message': 'Método no permitido'}, status=405)
 # --- AGREGAR AL FINAL DE core/views.py ---
 
 # --- EN core/views.py (Al final) ---
