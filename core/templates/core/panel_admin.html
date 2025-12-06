@@ -1,0 +1,316 @@
+{% extends 'base_admin.html' %} 
+{% load static %}
+
+{% block title %}Panel Admin | ModaOne{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">Dashboard General</h1>
+</div>
+<div class="row mb-4">
+    <div class="col-md-4">
+        <div class="card text-white bg-success mb-3 shadow-sm h-100">
+            <div class="card-header fw-bold">Ventas Totales</div>
+            <div class="card-body">
+                <h2 class="card-title" id="kpi-ventas">$0</h2>
+                <p class="card-text small">Ingresos acumulados históricos.</p>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <div class="card text-white bg-primary mb-3 shadow-sm h-100">
+            <div class="card-header fw-bold">Total Pedidos</div>
+            <div class="card-body">
+                <h2 class="card-title" id="kpi-ordenes">0</h2>
+                <p class="card-text small">Órdenes procesadas en el sistema.</p>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <div class="card text-white bg-danger mb-3 shadow-sm h-100">
+            <div class="card-header fw-bold">Alerta de Stock</div>
+            <div class="card-body">
+                <h2 class="card-title" id="kpi-stock">0</h2>
+                <p class="card-text small">Productos con stock bajo (<= 5).</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="d-flex justify-content-end mb-4">
+    <button onclick="window.print()" class="btn btn-outline-secondary">
+        <a href="{% url 'reporte_bi' %}" target="_blank" class="btn btn-outline-secondary">
+    <i class="fas fa-file-pdf"></i> Descargar Informe de Gestión (PDF)
+</a>
+    </button>
+</div>
+<hr>
+
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h2 class="h3">Inventario de Productos</h2>
+    <div class="btn-toolbar mb-2 mb-md-0">
+        <button class="btn btn-dark" onclick="abrirModalCrear()">
+            <i class="fas fa-plus"></i> Nuevo Producto
+        </button>
+    </div>
+</div>
+
+<div class="card mb-4 border-0 shadow-sm bg-light">
+    <div class="card-body p-2">
+        <input type="text" id="buscador" class="form-control border-0 bg-transparent shadow-none" placeholder="Buscar..." onkeyup="filtrarTabla()">
+    </div>
+</div>
+
+<div class="table-responsive bg-white shadow-sm rounded p-0 mb-5">
+    <table class="table table-hover align-middle mb-0">
+        <thead class="table-light">
+            <tr>
+                <th class="ps-4">Producto</th><th>Precio</th><th>Stock</th><th>Variantes</th><th>Estado</th><th class="text-end pe-4">Acciones</th>
+            </tr>
+        </thead>
+        <tbody id="lista-productos">
+            <tr><td colspan="6" class="text-center py-5">Cargando...</td></tr>
+        </tbody>
+    </table>
+</div>
+
+{% include "core/includes/modal_crud_producto.html" %}
+
+<script>
+    let productosGlobal = []; // Cache local
+
+    document.addEventListener('DOMContentLoaded', function() {
+        const apiProductos = "/api/v1/productos/";
+        const apiDashboard = "/api/v1/dashboard-kpi/";
+        
+        // 1. CSRF Token
+        function getCookie(name) {
+            let cookieValue = null;
+            if (document.cookie && document.cookie !== '') {
+                const cookies = document.cookie.split(';');
+                for (let i = 0; i < cookies.length; i++) {
+                    const cookie = cookies[i].trim();
+                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                        break;
+                    }
+                }
+            }
+            return cookieValue;
+        }
+        const csrftoken = getCookie('csrftoken');
+
+        // 2. CARGA INICIAL
+        cargarKPIs();
+        cargarProductos();
+
+    async function cargarKPIs() {
+        try {
+            const response = await fetch('/api/v1/dashboard-kpi/');
+            if (response.ok) {
+                const data = await response.json();
+                // Formatear dinero
+                document.getElementById('kpi-ventas').innerText = '$' + parseInt(data.total_ventas).toLocaleString('es-CL');
+                document.getElementById('kpi-ordenes').innerText = data.total_ordenes;
+                document.getElementById('kpi-stock').innerText = data.bajo_stock;
+            }
+        } catch (error) {
+            console.error('Error cargando KPIs:', error);
+        }
+    }
+
+        async function cargarProductos() {
+            try {
+                const res = await fetch(apiProductos);
+                if(res.ok) {
+                    productosGlobal = await res.json();
+                    renderizarTabla(productosGlobal);
+                } else if (res.status === 403) {
+                    alert("No tienes permisos de administrador.");
+                }
+            } catch(e) { console.error(e); }
+        }
+
+        // 3. RENDERIZAR TABLA
+        window.renderizarTabla = function(productos) {
+            const tbody = document.getElementById('lista-productos');
+            tbody.innerHTML = '';
+            if(productos.length === 0) { tbody.innerHTML = '<tr><td colspan="6" class="text-center py-5">Sin datos.</td></tr>'; return; }
+
+            productos.forEach(p => {
+                // Evitar error si no tiene variantes
+                const variantes = p.variantes || [];
+                const stockTotal = variantes.reduce((sum, v) => sum + v.stock, 0);
+                const tallas = variantes.map(v => `<span class="badge bg-light text-dark border">${v.talla}</span>`).join(' ');
+                const img = p.imagen_url || 'https://via.placeholder.com/40';
+                
+                tbody.innerHTML += `
+                    <tr>
+                        <td class="ps-4">
+                            <div class="d-flex align-items-center">
+                                <img src="${img}" style="width:40px;height:40px;object-fit:cover;" class="rounded me-3 border">
+                                <div><div class="fw-bold">${p.nombre}</div><div class="small text-muted">ID: ${p.id}</div></div>
+                            </div>
+                        </td>
+                        <td>$${parseInt(p.precio).toLocaleString('es-CL')}</td>
+                        <td class="${stockTotal < 5 ? 'text-danger fw-bold' : ''}">${stockTotal}</td>
+                        <td>${tallas}</td>
+                        <td>${p.activo ? '<span class="badge bg-success">Activo</span>' : '<span class="badge bg-secondary">Inactivo</span>'}</td>
+                        <td class="text-end pe-4">
+                            <button class="btn btn-sm btn-outline-primary" onclick="abrirModalEditar(${p.id})"><i class="fas fa-edit"></i></button>
+                            <button class="btn btn-sm btn-outline-danger" onclick="eliminarProducto(${p.id})"><i class="fas fa-trash"></i></button>
+                        </td>
+                    </tr>
+                `;
+            });
+        }
+
+        // 4. FILTRO
+        window.filtrarTabla = function() {
+            const txt = document.getElementById('buscador').value.toLowerCase();
+            const filter = productosGlobal.filter(p => p.nombre.toLowerCase().includes(txt) || p.id.toString().includes(txt));
+            renderizarTabla(filter);
+        }
+
+        // 5. GESTIÓN DE MODALES
+        const modalEl = document.getElementById('modalProducto');
+        const modal = new bootstrap.Modal(modalEl);
+
+        window.abrirModalCrear = function() {
+            document.getElementById('form-producto').reset();
+            document.getElementById('prod_id').value = ''; // ID vacío para crear
+            document.getElementById('modalTitulo').innerText = 'Nuevo Producto';
+            document.getElementById('body-variantes').innerHTML = '';
+            document.getElementById('img-preview').src = 'https://via.placeholder.com/150';
+            
+            // Agregar una fila vacía limpia
+            agregarFilaVariante(); 
+            modal.show();
+        }
+
+        window.abrirModalEditar = function(id) {
+            const p = productosGlobal.find(x => x.id === id);
+            if(!p) return;
+
+            document.getElementById('prod_id').value = p.id;
+            document.getElementById('modalTitulo').innerText = 'Editar #' + p.id;
+            document.getElementById('prod_nombre').value = p.nombre;
+            document.getElementById('prod_precio').value = p.precio;
+            document.getElementById('prod_img').value = p.imagen_url;
+            document.getElementById('prod_desc').value = p.descripcion;
+            document.getElementById('prod_activo').checked = p.activo;
+            
+            // --- NUEVO: Cargar Categoría y Marca ---
+            document.getElementById('prod_categoria').value = p.categoria || 'hombre';
+            document.getElementById('prod_marca').value = p.marca || 'generico';
+            // ---------------------------------------
+
+            if(typeof actualizarPreview === 'function') actualizarPreview();
+
+            const tbody = document.getElementById('body-variantes');
+            tbody.innerHTML = '';
+            if(p.variantes) {
+                p.variantes.forEach(v => {
+                    if(typeof agregarFilaVariante === 'function') 
+                        agregarFilaVariante(v.talla, v.color, v.stock, v.id);
+                });
+            }
+            modal.show();
+        }
+
+        // 6. GUARDAR (Lógica Crítica Corregida)
+        const form = document.getElementById('form-producto');
+        if(form) {
+            form.addEventListener('submit', async function(e) {
+                e.preventDefault();
+                
+                const id = document.getElementById('prod_id').value;
+                const isEdit = !!id; // Si hay ID, es edición
+                const url = isEdit ? `${apiProductos}${id}/` : apiProductos;
+                const method = isEdit ? 'PUT' : 'POST';
+
+                const data = {
+                nombre: document.getElementById('prod_nombre').value,
+                
+                // --- NUEVO: Enviar Categoría y Marca ---
+                categoria: document.getElementById('prod_categoria').value,
+                marca: document.getElementById('prod_marca').value,
+                // ---------------------------------------
+
+                precio: document.getElementById('prod_precio').value,
+                imagen_url: document.getElementById('prod_img').value,
+                descripcion: document.getElementById('prod_desc').value,
+                activo: document.getElementById('prod_activo').checked,
+                variantes: []
+            };
+
+                // Leer Variantes
+                const filas = document.querySelectorAll('#body-variantes tr');
+                filas.forEach(row => {
+                    // Buscamos inputs por tipo para ser precisos
+                    const inputsText = row.querySelectorAll('input[type="text"]');
+                    const inputNum = row.querySelector('input[type="number"]');
+                    const inputId = row.querySelector('.var-id'); // Input hidden del ID variante
+
+                    const talla = inputsText[0]?.value;
+                    const color = inputsText[1]?.value;
+                    const stock = inputNum?.value;
+                    const varId = inputId?.value;
+
+                    if(talla && color) {
+                        const v = { 
+                            talla: talla, 
+                            color: color, 
+                            stock: parseInt(stock) || 0 
+                        };
+                        // Si estamos editando y la variante tiene ID, lo agregamos
+                        if(isEdit && varId) {
+                            v.id = parseInt(varId);
+                        }
+                        data.variantes.push(v);
+                    }
+                });
+
+                try {
+                    const res = await fetch(url, {
+                        method: method,
+                        headers: { 
+                            'Content-Type': 'application/json', 
+                            'X-CSRFToken': csrftoken 
+                        },
+                        body: JSON.stringify(data)
+                    });
+
+                    if(res.ok) {
+                        modal.hide();
+                        cargarProductos();
+                        cargarKPIs();
+                        alert(isEdit ? 'Producto actualizado con éxito' : 'Producto creado con éxito');
+                    } else {
+                        const err = await res.json();
+                        console.error("Error API:", err);
+                        alert('Error al guardar: Verifica los datos.');
+                    }
+                } catch(e) { 
+                    console.error(e);
+                    alert('Error de conexión con el servidor.'); 
+                }
+            });
+        }
+
+        // 7. ELIMINAR
+        window.eliminarProducto = async function(id) {
+            if(!confirm('¿Eliminar este producto?')) return;
+            try {
+                const res = await fetch(`${apiProductos}${id}/`, {
+                    method: 'DELETE',
+                    headers: { 'X-CSRFToken': csrftoken }
+                });
+                if(res.status === 204) { cargarProductos(); cargarKPIs(); }
+            } catch(e) {}
+        }
+    });
+</script>
+{% endblock %}

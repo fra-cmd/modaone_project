@@ -1,0 +1,150 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Pago Seguro | ModaOne{% endblock %}
+
+{% block content %}
+<style>
+    /* Estilos para simular tarjeta realista */
+    .credit-card-form { max-width: 500px; margin: 0 auto; }
+    .card-input { background-color: #f8f9fa; border: 1px solid #dee2e6; font-family: monospace; letter-spacing: 2px; }
+    .secure-badge { font-size: 0.8rem; color: #28a745; }
+    .loader-overlay {
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        background: rgba(255, 255, 255, 0.9); z-index: 9999;
+        display: none; justify-content: center; align-items: center; flex-direction: column;
+    }
+    .bank-logo { height: 40px; opacity: 0.7; }
+</style>
+
+<div id="bank-loader" class="loader-overlay">
+    <div class="spinner-border text-primary mb-3" style="width: 3rem; height: 3rem;" role="status"></div>
+    <h4 class="fw-bold text-dark" id="loader-text">Conectando con el Banco...</h4>
+    <p class="text-muted small">No cierres esta ventana</p>
+</div>
+
+<div class="container my-5">
+    <div class="row justify-content-center">
+        <div class="col-md-5 mb-4">
+            <div class="card border-0 shadow-sm bg-light h-100">
+                <div class="card-body p-4">
+                    <h5 class="fw-bold text-muted mb-4">RESUMEN DE LA ORDEN</h5>
+                    <div class="d-flex justify-content-between mb-2">
+                        <span>N° Orden:</span>
+                        <span class="fw-bold">#{{ orden.numero_orden }}</span>
+                    </div>
+                    <div class="d-flex justify-content-between mb-2">
+                        <span>Cliente:</span>
+                        <span>{{ orden.usuario.first_name }} {{ orden.usuario.last_name }}</span>
+                    </div>
+                    <hr>
+                    <div class="d-flex justify-content-between mb-2">
+                        <span>Subtotal</span>
+                        <span>${{ orden.subtotal|floatformat:0 }}</span>
+                    </div>
+                    <div class="d-flex justify-content-between mb-2">
+                        <span>Envío</span>
+                        <span>${{ orden.costo_envio|floatformat:0 }}</span>
+                    </div>
+                    <div class="d-flex justify-content-between mt-3">
+                        <span class="h5 fw-bold">Total a Pagar</span>
+                        <span class="h4 fw-bold text-primary">${{ orden.total_final|floatformat:0 }}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6">
+            <div class="card border-0 shadow-lg">
+                <div class="card-header bg-white border-bottom-0 pt-4 pb-0">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0 fw-bold">Pago Seguro</h5>
+                        <div class="d-flex gap-2">
+                            <i class="fab fa-cc-visa fa-2x text-primary"></i>
+                            <i class="fab fa-cc-mastercard fa-2x text-danger"></i>
+                            <i class="fab fa-cc-amex fa-2x text-info"></i>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body p-4">
+                    <form id="payment-form" action="{% url 'procesar_pago_real' orden.id %}" method="POST">
+                        {% csrf_token %}
+                        
+                        <div class="mb-3">
+                            <label class="form-label small text-muted fw-bold">TITULAR DE LA TARJETA</label>
+                            <input type="text" class="form-control p-3" placeholder="Como aparece en la tarjeta" required>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label small text-muted fw-bold">NÚMERO DE TARJETA</label>
+                            <div class="input-group">
+                                <span class="input-group-text bg-white"><i class="fas fa-credit-card"></i></span>
+                                <input type="text" class="form-control p-3 card-input" placeholder="0000 0000 0000 0000" maxlength="19" required id="card-number">
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-6 mb-3">
+                                <label class="form-label small text-muted fw-bold">EXPIRACIÓN</label>
+                                <input type="text" class="form-control p-3 text-center" placeholder="MM/YY" maxlength="5" required>
+                            </div>
+                            <div class="col-6 mb-3">
+                                <label class="form-label small text-muted fw-bold">CVV</label>
+                                <div class="input-group">
+                                    <input type="password" class="form-control p-3 text-center" placeholder="123" maxlength="3" required>
+                                    <span class="input-group-text bg-white" title="3 dígitos al reverso"><i class="fas fa-question-circle text-muted"></i></span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="form-check mb-4">
+                            <input class="form-check-input" type="checkbox" checked>
+                            <label class="form-check-label small text-muted">Guardar tarjeta para futuras compras</label>
+                        </div>
+
+                        <button type="submit" class="btn btn-dark w-100 py-3 fw-bold shadow-sm hover-scale">
+                            PAGAR ${{ orden.total_final|floatformat:0 }}
+                        </button>
+                        
+                        <div class="text-center mt-3">
+                            <p class="secure-badge"><i class="fas fa-lock"></i> Transacción Encriptada SSL 256-bit</p>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    document.getElementById('payment-form').addEventListener('submit', function(e) {
+        e.preventDefault(); // Detiene el envío real inmediato
+        
+        const loader = document.getElementById('bank-loader');
+        const text = document.getElementById('loader-text');
+        const form = this;
+
+        // 1. Mostrar Overlay
+        loader.style.display = 'flex';
+
+        // 2. Secuencia de mensajes (Simulación)
+        setTimeout(() => { text.innerText = "Verificando fondos..."; }, 1500);
+        setTimeout(() => { text.innerText = "Autenticando con el emisor..."; }, 3000);
+        setTimeout(() => { 
+            text.innerText = "¡Transacción Aprobada!";
+            text.classList.remove('text-dark');
+            text.classList.add('text-success');
+            
+            // 3. Enviar formulario real tras 4.5 segundos
+            setTimeout(() => {
+                form.submit();
+            }, 1000);
+        }, 4500);
+    });
+
+    // Formato visual simple para tarjeta (espacios cada 4 números)
+    document.getElementById('card-number').addEventListener('input', function (e) {
+        e.target.value = e.target.value.replace(/[^\d]/g, '').replace(/(.{4})/g, '$1 ').trim();
+    });
+</script>
+{% endblock %}

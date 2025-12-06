@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+    body { font-family: Helvetica; }
+    .header { text-align: center; border-bottom: 2px solid #333; margin-bottom: 20px; }
+    h1 { color: #0056b3; }
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+    th { background: #eee; padding: 5px; text-align: left; }
+    td { padding: 5px; border-bottom: 1px solid #ccc; }
+    .kpi-box { background: #f4f4f4; padding: 10px; display: inline-block; width: 30%; text-align: center; margin-right: 2%; }
+    .valor { font-size: 18px; font-weight: bold; display: block; }
+</style>
+</head>
+<body>
+    <div class="header">
+        <h1>Informe de Gestión Mensual</h1>
+        <p>Generado por: {{ generado_por }} | Fecha: {% now "d/m/Y" %}</p>
+    </div>
+
+    <div>
+        <div class="kpi-box">Ventas<span class="valor">${{ total_ventas|floatformat:0 }}</span></div>
+        <div class="kpi-box">Pedidos<span class="valor">{{ total_pedidos }}</span></div>
+        <div class="kpi-box">Ticket Promedio<span class="valor">${{ ticket_promedio|floatformat:0 }}</span></div>
+    </div>
+    <br><br>
+
+    <h3>🔥 Top Productos Vendidos</h3>
+    <table>
+        <tr><th>Producto</th><th>Unidades</th></tr>
+        {% for p in top_productos %}
+        <tr><td>{{ p.nombre_producto }}</td><td>{{ p.total_vendido }}</td></tr>
+        {% empty %}<tr><td colspan="2">Sin datos.</td></tr>
+        {% endfor %}
+    </table>
+
+    <h3>👀 Top Probador Virtual (Interés)</h3>
+    <table>
+        <tr><th>Producto</th><th>Pruebas</th></tr>
+        {% for t in top_tryon %}
+        <tr><td>{{ t.producto__nombre }}</td><td>{{ t.veces_probado }}</td></tr>
+        {% empty %}<tr><td colspan="2">Sin datos.</td></tr>
+        {% endfor %}
+    </table>
+</body>
+</html>

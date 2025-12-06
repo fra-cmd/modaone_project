@@ -1,0 +1,31 @@
+{% extends 'base.html' %} 
+
+{% block title %}Compra Confirmada{% endblock %}
+
+{% block content %}
+<div class="container my-5 text-center">
+    <div class="card p-5 shadow-lg mx-auto border-0" style="max-width: 600px;">
+        <div class="mb-4">
+            <i class="fas fa-check-circle text-success" style="font-size: 4rem;"></i>
+        </div>
+        <h2 class="mb-3 fw-bold">¡Pago Exitoso!</h2>
+        <p class="lead text-muted">Tu orden <strong>#{{ orden.numero_orden }}</strong> ha sido confirmada.</p>
+        
+        <div class="alert alert-light border my-4">
+            Hemos enviado un comprobante a <strong>{{ orden.email }}</strong>
+        </div>
+        
+        <div class="d-grid gap-2 col-8 mx-auto">
+            <a href="{% url 'descargar_boleta' orden.id %}" class="btn btn-dark">
+                <i class="fas fa-file-pdf me-2"></i> Descargar Boleta PDF
+            </a>
+            
+            <a href="{% url 'mis_pedidos' %}" class="btn btn-outline-secondary">
+                Ir a Mis Pedidos
+            </a>
+        </div>
+        
+        <a href="{% url 'home' %}" class="d-block mt-4 text-decoration-none text-muted small">Volver al Catálogo</a>
+    </div>
+</div>
+{% endblock %}

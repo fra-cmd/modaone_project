@@ -1,0 +1,187 @@
+{% extends 'base.html' %}
+
+{% block title %}Probador IA Realista | ModaOne{% endblock %}
+
+{% block content %}
+<div class="container my-5">
+    <div class="text-center mb-4">
+        <h2 class="fw-bold text-uppercase">Probador Virtual IA <span class="badge bg-primary align-top" style="font-size: 0.5em;">BETA</span></h2>
+        <p class="text-muted">Sube tu foto y deja que nuestra IA te vista.</p>
+    </div>
+
+    <div class="row justify-content-center">
+        <div class="col-md-5 mb-4">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-header bg-dark text-white fw-bold">1. Configuración</div>
+                <div class="card-body">
+                    <div class="d-flex align-items-center mb-4 p-2 border rounded bg-light">
+                        <img src="{{ producto.imagen_url }}" id="img-prenda" class="rounded border me-3" style="width: 60px; height: 60px; object-fit: cover;">
+                        <div>
+                            <h6 class="mb-0 fw-bold">{{ producto.nombre }}</h6>
+                            <small class="text-muted">Prenda a probar</small>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Sube tu foto (Cuerpo completo)</label>
+                        <input type="file" id="input-foto" class="form-control" accept="image/*">
+                        <div class="form-text small">Usa buena iluminación y fondo simple.</div>
+                    </div>
+
+                    <div class="mb-4">
+                        <label class="form-label fw-bold">Tipo de Prenda</label>
+                        <select id="categoria-prenda" class="form-select">
+                            <option value="upper_body" selected>Parte Superior (Polera, Polerón)</option>
+                            <option value="lower_body">Parte Inferior (Jeans, Pantalón)</option>
+                            <option value="dresses">Vestido / Enterito</option>
+                        </select>
+                    </div>
+
+                    <button id="btn-generar" class="btn btn-primary w-100 py-2 fw-bold shadow-sm" disabled>
+                        <i class="fas fa-magic me-2"></i> GENERAR PRUEBA
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-7">
+            <div class="card border-0 shadow-lg h-100 bg-dark text-white text-center">
+                <div class="card-body d-flex flex-column align-items-center justify-content-center" style="min-height: 500px;">
+                    
+                    <div id="estado-inicial" class="opacity-50">
+                        <i class="fas fa-tshirt fa-5x mb-3"></i>
+                        <h4>El resultado aparecerá aquí</h4>
+                    </div>
+
+                    <div id="loader-ia" style="display: none;">
+                        <div class="spinner-border text-info mb-3" style="width: 3rem; height: 3rem;" role="status"></div>
+                        <h5>La IA está trabajando...</h5>
+                        <p class="small text-muted">Esto puede tomar unos 15-20 segundos.</p>
+                    </div>
+
+                    <div id="resultado-container" style="display: none; width: 100%;">
+                        <h5 class="text-success mb-3"><i class="fas fa-check-circle"></i> ¡Listo!</h5>
+                        <img id="img-resultado" src="" class="img-fluid rounded shadow-lg mb-3" style="max-height: 500px;">
+                        
+                        <div class="d-flex justify-content-center gap-2">
+                            <a href="#" id="btn-descargar" download="modaone_tryon.png" class="btn btn-outline-light btn-sm">
+                                <i class="fas fa-download"></i> Guardar
+                            </a>
+                            <form method="POST" action="{% url 'agregar_desde_catalogo' producto.id %}">
+                                {% csrf_token %}
+                                <input type="hidden" name="cantidad" value="1">
+                                <input type="hidden" name="variante_id" value="{{ producto.obtener_variante_disponible.id }}">
+                                <button type="submit" class="btn btn-success btn-sm fw-bold">
+                                    <i class="fas fa-shopping-cart"></i> ¡Me lo llevo!
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const inputFoto = document.getElementById('input-foto');
+    const btnGenerar = document.getElementById('btn-generar');
+    const imgPrendaUrl = document.getElementById('img-prenda').src;
+    
+    // Contenedores visuales
+    const estadoInicial = document.getElementById('estado-inicial');
+    const loader = document.getElementById('loader-ia');
+    const resultadoContainer = document.getElementById('resultado-container');
+    const imgResultado = document.getElementById('img-resultado');
+    const btnDescargar = document.getElementById('btn-descargar');
+
+    // 1. Convertir imagen subida a Base64
+    let base64Image = "";
+
+    inputFoto.addEventListener('change', function() {
+        const file = this.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                base64Image = e.target.result; // Data URL completa
+                btnGenerar.disabled = false;
+                btnGenerar.classList.add('pulse-animation'); // Efecto visual
+            }
+            reader.readAsDataURL(file);
+        }
+    });
+
+    // 2. Enviar a la IA
+    btnGenerar.addEventListener('click', async function() {
+        // UI: Mostrar carga
+        estadoInicial.style.display = 'none';
+        resultadoContainer.style.display = 'none';
+        loader.style.display = 'block';
+        btnGenerar.disabled = true;
+        btnGenerar.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Generando...';
+
+        const categoria = document.getElementById('categoria-prenda').value;
+
+        try {
+            const response = await fetch('/api/procesar-tryon/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    imagen_usuario: base64Image,
+                    imagen_prenda: imgPrendaUrl,
+                    categoria: categoria,
+                    producto_id: "{{ producto.id }}"
+                })
+            });
+
+            const data = await response.json();
+
+            if (data.status === 'success') {
+                // UI: Mostrar resultado
+                imgResultado.src = data.imagen_generada;
+                btnDescargar.href = data.imagen_generada;
+                // --- NUEVO: REGISTRAR EVENTO PARA BI ---
+                fetch('/api/registrar-tryon/', {
+                    method: 'POST',
+                    body: JSON.stringify({ producto_id: "{{ producto.id }}" })
+                });
+                // ---------------------------------------
+                
+                loader.style.display = 'none';
+                resultadoContainer.style.display = 'block';
+            
+                
+                loader.style.display = 'none';
+                resultadoContainer.style.display = 'block';
+            } else {
+                alert('Error de la IA: ' + data.message);
+                loader.style.display = 'none';
+                estadoInicial.style.display = 'block';
+            }
+
+        } catch (error) {
+            console.error(error);
+            alert('Error de conexión con el servidor.');
+            loader.style.display = 'none';
+            estadoInicial.style.display = 'block';
+        } finally {
+            btnGenerar.disabled = false;
+            btnGenerar.innerHTML = '<i class="fas fa-magic me-2"></i> GENERAR PRUEBA';
+        }
+    });
+</script>
+
+<style>
+    @keyframes pulse {
+        0% { box-shadow: 0 0 0 0 rgba(13, 110, 253, 0.7); }
+        70% { box-shadow: 0 0 0 10px rgba(13, 110, 253, 0); }
+        100% { box-shadow: 0 0 0 0 rgba(13, 110, 253, 0); }
+    }
+    .pulse-animation {
+        animation: pulse 2s infinite;
+    }
+</style>
+{% endblock %}

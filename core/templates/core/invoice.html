@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Boleta Electrónica</title>
+    <style>
+        body { font-family: Helvetica, sans-serif; color: #333; font-size: 12px; }
+        .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #000; padding-bottom: 10px; }
+        .empresa { font-size: 20px; font-weight: bold; text-transform: uppercase; }
+        .rut { font-size: 14px; color: #555; }
+        
+        .info-box { width: 100%; margin-bottom: 20px; }
+        .info-box td { padding: 5px; }
+        
+        table.products { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        table.products th { background-color: #eee; padding: 8px; text-align: left; border-bottom: 1px solid #aaa; }
+        table.products td { padding: 8px; border-bottom: 1px solid #ddd; }
+        
+        .totales { margin-top: 30px; text-align: right; }
+        .gran-total { font-size: 16px; font-weight: bold; color: #000; }
+        
+        .footer { margin-top: 50px; text-align: center; font-size: 10px; color: #777; border-top: 1px solid #eee; padding-top: 10px; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="empresa">ModaOne Chile SpA</div>
+        <div class="rut">RUT: 76.123.456-8</div>
+        <div class="rut">Giro: Venta de Vestuario y Accesorios</div>
+        <br>
+        <div><strong>BOLETA ELECTRÓNICA N° {{ orden.id }}</strong></div>
+    </div>
+
+    <table class="info-box">
+        <tr>
+            <td><strong>Fecha:</strong> {{ orden.fecha_creacion|date:"d/m/Y H:i" }}</td>
+            <td><strong>N° Orden:</strong> {{ orden.numero_orden }}</td>
+        </tr>
+        <tr>
+            <td><strong>Cliente:</strong> {{ orden.usuario.first_name }} {{ orden.usuario.last_name }}</td>
+            <td><strong>Email:</strong> {{ orden.email }}</td>
+        </tr>
+        <tr>
+            <td colspan="2"><strong>Dirección de Envío:</strong><br>{{ orden.direccion_envio }}</td>
+        </tr>
+    </table>
+
+    <table class="products">
+        <thead>
+            <tr>
+                <th>Producto / Detalle</th>
+                <th style="text-align: center;">Cant.</th>
+                <th style="text-align: right;">Precio Unit.</th>
+                <th style="text-align: right;">Total</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in orden.items_orden.all %}
+            <tr>
+                <td>{{ item.nombre_producto }}<br><small>{{ item.talla_color }}</small></td>
+                <td style="text-align: center;">{{ item.cantidad }}</td>
+                <td style="text-align: right;">${{ item.precio_unitario }}</td>
+                <td style="text-align: right;">${{ item.precio_unitario }}</td> 
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <div class="totales">
+        <p>Subtotal: ${{ orden.subtotal }}</p>
+        <p>Envío: ${{ orden.costo_envio }}</p>
+        <p class="gran-total">TOTAL A PAGAR: ${{ orden.total_final }}</p>
+    </div>
+
+    <div class="footer">
+        <p>Gracias por tu compra en ModaOne.</p>
+        <p>Timbre Electrónico SII - Verifique documento en www.sii.cl</p>
+    </div>
+</body>
+</html>

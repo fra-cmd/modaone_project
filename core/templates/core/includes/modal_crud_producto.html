@@ -1,0 +1,112 @@
+<div class="modal fade" id="modalProducto" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-dark text-white">
+                <h5 class="modal-title" id="modalTitulo">Gestión de Producto</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            
+            <form id="form-producto">
+                <input type="hidden" id="prod_id">
+
+                <div class="modal-body">
+                    <div class="row">
+                        <div class="col-md-8">
+                            <div class="mb-3">
+                                <label class="form-label fw-bold">Nombre</label>
+                                <input type="text" class="form-control" id="prod_nombre" required>
+                            </div>
+                            
+                            <div class="row mb-3">
+                                <div class="col-6">
+                                    <label class="form-label fw-bold">Categoría</label>
+                                    <select class="form-select" id="prod_categoria">
+                                        <option value="hombre">Hombres</option>
+                                        <option value="mujer">Mujeres</option>
+                                        <option value="accesorios">Accesorios</option>
+                                    </select>
+                                </div>
+                                <div class="col-6">
+                                    <label class="form-label fw-bold">Marca</label>
+                                    <select class="form-select" id="prod_marca">
+                                        <option value="generico">Otra / Genérica</option>
+                                        <option value="guess">Guess</option>
+                                        <option value="northface">The North Face</option>
+                                        <option value="ck">Calvin Klein</option>
+                                        <option value="ea7">EA7 Armani</option>
+                                        <option value="coach">Coach</option>
+                                        <option value="mk">Michael Kors</option>
+                                        <option value="ae">American Eagle</option>
+                                        <option value="versace">Versace</option>
+                                        <option value="tommy">Tommy Hilfiger</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="row">
+                                <div class="col-6 mb-3">
+                                    <label class="form-label fw-bold">Precio</label>
+                                    <input type="number" class="form-control" id="prod_precio" required>
+                                </div>
+                                <div class="col-6 mb-3">
+                                    <label class="form-label fw-bold">URL Imagen</label>
+                                    <input type="url" class="form-control" id="prod_img" oninput="actualizarPreview()">
+                                </div>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label fw-bold">Descripción</label>
+                                <textarea class="form-control" id="prod_desc" rows="2"></textarea>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="prod_activo" checked>
+                                <label class="form-check-label">Activo</label>
+                            </div>
+                        </div>
+                        <div class="col-md-4 text-center bg-light border rounded d-flex align-items-center justify-content-center">
+                            <img id="img-preview" src="https://via.placeholder.com/150" style="max-height: 150px; max-width: 100%;">
+                        </div>
+                    </div>
+
+                    <hr>
+                    <div class="d-flex justify-content-between mb-2">
+                        <h6 class="fw-bold">Variantes</h6>
+                        <button type="button" class="btn btn-sm btn-dark" onclick="agregarFilaVariante()">
+                            <i class="fas fa-plus"></i> Agregar
+                        </button>
+                    </div>
+                    
+                    <div class="table-responsive" style="max-height: 200px; overflow-y: auto;">
+                        <table class="table table-sm table-bordered text-center">
+                            <thead class="table-light sticky-top">
+                                <tr><th>Talla</th><th>Color</th><th>Stock</th><th></th></tr>
+                            </thead>
+                            <tbody id="body-variantes"></tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+                    <button type="submit" class="btn btn-success">Guardar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+    function actualizarPreview() {
+        const url = document.getElementById('prod_img').value;
+        document.getElementById('img-preview').src = url || 'https://via.placeholder.com/150';
+    }
+    function agregarFilaVariante(talla='', color='', stock=0, id='') {
+        const tbody = document.getElementById('body-variantes');
+        const row = document.createElement('tr');
+        row.innerHTML = `
+            <input type="hidden" class="var-id" value="${id}">
+            <td><input type="text" class="form-control form-control-sm text-center" value="${talla}" placeholder="Talla" required></td>
+            <td><input type="text" class="form-control form-control-sm text-center" value="${color}" placeholder="Color" required></td>
+            <td><input type="number" class="form-control form-control-sm text-center" value="${stock}" placeholder="0" required></td>
+            <td><button type="button" class="btn btn-sm text-danger" onclick="this.closest('tr').remove()"><i class="fas fa-times"></i></button></td>
+        `;
+        tbody.appendChild(row);
+    }
+</script>

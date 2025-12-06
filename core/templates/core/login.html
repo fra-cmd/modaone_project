@@ -1,0 +1,44 @@
+{% extends 'base.html' %}
+
+{% block title %}Iniciar Sesión{% endblock %}
+
+{% block content %}
+<div class="container my-5">
+    <div class="row justify-content-center">
+        <div class="col-md-6">
+            <div class="card shadow-lg">
+                <div class="card-header bg-dark text-white">
+                    <h4 class="mb-0">Iniciar Sesión </h4>
+                </div>
+                <div class="card-body">
+                    {% if form.errors %}
+                    <div class="alert alert-danger" role="alert">
+                        Tu nombre de usuario o contraseña son incorrectos.
+                    </div>
+                    {% endif %}
+
+                    <form method="post">
+                        {% csrf_token %} 
+
+                        {% for field in form %}
+                            <div class="mb-3">
+                                <label for="{{ field.id_for_label }}" class="form-label">{{ field.label }}</label>
+                                {{ field }}
+                                {% for error in field.errors %}
+                                    <p class="text-danger small">{{ error }}</p>
+                                {% endfor %}
+                            </div>
+                        {% endfor %}
+
+                        <button type="submit" class="btn btn-success w-100 mt-3">Acceder</button>
+
+                        </form>
+                </div>
+                <div class="card-footer text-center">
+                    ¿Aún no tienes cuenta? <a href="{% url 'registro' %}">Regístrate</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

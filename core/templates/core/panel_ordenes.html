@@ -1,0 +1,210 @@
+{% extends 'base_admin.html' %}
+
+{% block title %}Logística y Despacho | ModaOne{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center pt-3 pb-2 mb-4 border-bottom">
+    <div>
+        <h1 class="h2 fw-bold"><i class="fas fa-boxes me-2"></i>Estación de Despacho</h1>
+        <p class="text-muted mb-0">Gestión de Picking, Etiquetado y Comunicación.</p>
+    </div>
+    <div class="btn-group">
+        <button class="btn btn-outline-dark disabled fw-bold">
+            <i class="fas fa-clipboard-check me-1"></i> {{ ordenes.count }} Pendientes
+        </button>
+    </div>
+</div>
+
+<div class="card border-0 shadow-sm">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="bg-light text-uppercase small fw-bold text-muted">
+                    <tr>
+                        <th class="ps-4" style="width: 5%;">Orden</th>
+                        <th style="width: 20%;">Cliente / Destino</th>
+                        <th style="width: 15%;">Logística</th>
+                        <th style="width: 25%;">Control de Estado</th>
+                        <th style="width: 20%;">Acciones Rápidas</th>
+                        <th class="text-end pe-4" style="width: 15%;">Detalle</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for orden in ordenes %}
+                    {% with direccion=orden.usuario.direcciones.last %}
+                    
+                    <tr class="border-bottom">
+                        <td class="ps-4">
+                            <span class="badge bg-dark">#{{ orden.numero_orden }}</span>
+                        </td>
+
+                        <td>
+                            <div class="d-flex flex-column">
+                                <strong class="text-dark">{{ orden.usuario.first_name }} {{ orden.usuario.last_name }}</strong>
+                                <span class="small text-muted mb-1">{{ orden.usuario.email }}</span>
+                                <div class="d-flex align-items-center small text-secondary">
+                                    <i class="fas fa-map-marker-alt me-1 text-danger"></i> 
+                                    <span class="text-truncate" style="max-width: 180px;">{{ orden.direccion_envio }}</span>
+                                </div>
+                            </div>
+                        </td>
+
+                        <td>
+                            {% if orden.costo_envio|floatformat:"0" == "5990" %}
+                                <span class="badge bg-info text-dark border border-info mb-1 w-100"><i class="fas fa-truck me-1"></i> Courier</span>
+                                <button class="btn btn-outline-dark btn-sm w-100" style="font-size: 0.7rem;" 
+                                        onclick="generarEtiqueta('{{ orden.numero_orden }}', '{{ orden.usuario.first_name }} {{ orden.usuario.last_name }}', '{{ orden.direccion_envio }}', '{{ direccion.telefono }}', 'BlueExpress')">
+                                    <i class="fas fa-print me-1"></i> Ver Etiqueta
+                                </button>
+                            {% else %}
+                                <span class="badge bg-warning text-dark border border-warning mb-1 w-100"><i class="fas fa-bolt me-1"></i> Flash</span>
+                                <span class="small text-muted d-block text-center">Entrega Directa</span>
+                            {% endif %}
+                        </td>
+
+                        <td>
+                            <form action="{% url 'cambiar_estado_orden' orden.id %}" method="POST">
+                                {% csrf_token %}
+                                <div class="input-group input-group-sm mb-2">
+                                    <select name="nuevo_estado" class="form-select fw-bold 
+                                        {% if orden.estado == 'PENDIENTE' %}text-warning
+                                        {% elif orden.estado == 'CONFIRMADO' %}text-info
+                                        {% elif orden.estado == 'DESPACHO' %}text-primary
+                                        {% elif orden.estado == 'ENTREGADO' %}text-success{% endif %}"
+                                        style="border-color: #ced4da;">
+                                        {% for codigo, nombre in estados %}
+                                            <option value="{{ codigo }}" {% if orden.estado == codigo %}selected{% endif %}>{{ nombre }}</option>
+                                        {% endfor %}
+                                    </select>
+                                    <button class="btn btn-dark" type="submit"><i class="fas fa-save"></i></button>
+                                </div>
+                                
+                                {% if orden.costo_envio|floatformat:"0" == "5990" and orden.estado != 'CANCELADO' %}
+                                    <input type="text" name="tracking_id" class="form-control form-control-sm" 
+                                           placeholder="Pegar Tracking ID..." value="{{ orden.codigo_seguimiento|default:'' }}"
+                                           onblur="this.form.submit()"> {% endif %}
+                            </form>
+                        </td>
+
+                        <td>
+                            {% if direccion.telefono %}
+                                {% if orden.costo_envio|floatformat:"0" == "5990" %}
+                                    <a href="https://wa.me/569{{ direccion.telefono|slice:'-8:' }}?text=Hola%20{{ orden.usuario.first_name }},%20tu%20pedido%20%23{{ orden.numero_orden }}%20fue%20entregado%20al%20courier.%20Seguimiento:%20{{ orden.codigo_seguimiento|default:'Pendiente' }}" 
+                                       target="_blank" class="btn btn-success btn-sm w-100 mb-1">
+                                        <i class="fab fa-whatsapp me-1"></i> Enviar Track
+                                    </a>
+                                {% else %}
+                                    <a href="https://wa.me/569{{ direccion.telefono|slice:'-8:' }}?text=Hola%20{{ orden.usuario.first_name }},%20soy%20del%20despacho%20ModaOne.%20Voy%20en%20camino%20con%20tu%20pedido%20%23{{ orden.numero_orden }}." 
+                                       target="_blank" class="btn btn-warning btn-sm w-100 mb-1 fw-bold">
+                                        <i class="fab fa-whatsapp me-1"></i> "Voy saliendo"
+                                    </a>
+                                {% endif %}
+                            {% else %}
+                                <button class="btn btn-light btn-sm w-100 text-muted border" disabled>Sin Teléfono</button>
+                            {% endif %}
+                        </td>
+
+                        <td class="text-end pe-4">
+                            <button class="btn btn-link text-decoration-none text-dark fw-bold" type="button" data-bs-toggle="collapse" data-bs-target="#picking{{ orden.id }}">
+                                <i class="fas fa-box-open me-1"></i> Ítems
+                            </button>
+                        </td>
+                    </tr>
+
+                    <tr class="collapse bg-light border-bottom" id="picking{{ orden.id }}">
+                        <td colspan="6" class="p-0">
+                            <div class="p-4">
+                                <h6 class="fw-bold text-uppercase text-muted mb-3 small ls-1"><i class="fas fa-clipboard-list me-2"></i>Lista de Empaque (Picking List)</h6>
+                                <div class="row g-3">
+                                    {% for item in orden.items_orden.all %}
+                                    <div class="col-md-4">
+                                        <div class="card h-100 border shadow-sm">
+                                            <div class="card-body d-flex align-items-center">
+                                                <div class="form-check me-3">
+                                                    <input class="form-check-input" type="checkbox" style="transform: scale(1.3);">
+                                                </div>
+                                                <div>
+                                                    <div class="fw-bold">{{ item.nombre_producto }}</div>
+                                                    <div class="small text-muted">{{ item.talla_color }}</div>
+                                                    <div class="badge bg-dark mt-1">Cant: {{ item.cantidad }}</div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    {% endfor %}
+                                </div>
+                                <div class="mt-3 text-end">
+                                    <small class="text-muted fst-italic">Marca las casillas al guardar los productos en la caja.</small>
+                                </div>
+                            </div>
+                        </td>
+                    </tr>
+                    
+                    {% endwith %}
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="modalEtiqueta" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-dark text-white">
+                <h5 class="modal-title"><i class="fas fa-print me-2"></i>Etiqueta de Despacho</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body bg-light p-4" id="areaImpresion">
+                <div class="bg-white p-4 border border-2 border-dark" style="max-width: 100%;">
+                    <div class="d-flex justify-content-between border-bottom pb-3 mb-3">
+                        <h2 class="fw-bold mb-0">MODAONE</h2>
+                        <div class="text-end">
+                            <small class="d-block fw-bold text-muted">ORDEN #<span id="lbl-orden"></span></small>
+                            <span class="badge bg-black text-white" id="lbl-courier">COURIER</span>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-4">
+                        <label class="small text-muted fw-bold">DESTINATARIO:</label>
+                        <h4 class="fw-bold mb-1" id="lbl-cliente">Nombre Cliente</h4>
+                        <p class="mb-0 fs-5" id="lbl-direccion">Dirección completa</p>
+                        <p class="mb-0 fw-bold"><i class="fas fa-phone-alt"></i> <span id="lbl-telefono"></span></p>
+                    </div>
+
+                    <div class="border-top pt-3 text-center">
+                        <div style="height: 50px; background: repeating-linear-gradient(to right, black 0, black 2px, white 2px, white 4px); width: 80%; margin: 0 auto;"></div>
+                        <small class="text-muted d-block mt-1">INTERNAL ROUTING CODE</small>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+                <button type="button" class="btn btn-primary" onclick="window.print()"><i class="fas fa-print me-2"></i>Imprimir</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    function generarEtiqueta(orden, cliente, direccion, telefono, courier) {
+        document.getElementById('lbl-orden').innerText = orden;
+        document.getElementById('lbl-cliente').innerText = cliente;
+        document.getElementById('lbl-direccion').innerText = direccion;
+        document.getElementById('lbl-telefono').innerText = telefono || 'S/N';
+        document.getElementById('lbl-courier').innerText = courier;
+        
+        var modal = new bootstrap.Modal(document.getElementById('modalEtiqueta'));
+        modal.show();
+    }
+</script>
+
+<style>
+    @media print {
+        body * { visibility: hidden; }
+        #areaImpresion, #areaImpresion * { visibility: visible; }
+        #areaImpresion { position: absolute; left: 0; top: 0; width: 100%; }
+        .modal-footer, .modal-header { display: none; }
+    }
+</style>
+{% endblock %}

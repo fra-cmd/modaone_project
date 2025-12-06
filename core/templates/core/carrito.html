@@ -1,0 +1,144 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Mi Carrito | ModaOne{% endblock %}
+
+{% block content %}
+<div class="container my-5">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2 class="fw-bold mb-0 text-dark">Tu Carrito</h2>
+        <span class="badge bg-dark rounded-pill px-3 py-2">{{ items|length }} ítems</span>
+    </div>
+
+    {% if items %}
+    <div class="row g-5">
+        <div class="col-lg-8">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body p-0">
+                    <div class="d-none d-md-flex bg-light p-3 border-bottom fw-bold text-muted small text-uppercase">
+                        <div class="col-6">Producto</div>
+                        <div class="col-3 text-center">Cantidad</div>
+                        <div class="col-3 text-end">Total</div>
+                    </div>
+
+                    {% for item in items %}
+                    <div class="p-3 border-bottom d-flex flex-wrap align-items-center">
+                        <div class="col-12 col-md-6 d-flex align-items-center mb-3 mb-md-0">
+                            <div class="position-relative me-3">
+                                <img src="{{ item.variante.producto.imagen_url }}" 
+                                     alt="{{ item.variante.producto.nombre }}" 
+                                     class="rounded border" 
+                                     style="width: 80px; height: 80px; object-fit: cover;">
+                                <span class="position-absolute top-0 start-0 translate-middle badge rounded-pill bg-secondary">
+                                    {{ forloop.counter }}
+                                </span>
+                            </div>
+                            <div>
+                                <h6 class="mb-0 fw-bold text-dark">{{ item.variante.producto.nombre }}</h6>
+                                <p class="mb-0 small text-muted">
+                                    Talla: <strong>{{ item.variante.talla }}</strong> | 
+                                    Color: <strong>{{ item.variante.color }}</strong>
+                                </p>
+                                <p class="mb-0 small text-primary">
+                                    Unitario: ${{ item.precio_unitario|floatformat:0 }}
+                                </p>
+                                <small class="text-danger fw-bold" style="font-size: 0.7rem;">
+                                    {% if item.variante.stock < 5 %}
+                                        ¡Solo quedan {{ item.variante.stock }}!
+                                    {% else %}
+                                        Stock disponible: {{ item.variante.stock }}
+                                    {% endif %}
+                                </small>
+                            </div>
+                        </div>
+
+                        <div class="col-6 col-md-3 text-center">
+                            <form action="{% url 'actualizar_cantidad' item.id %}" method="POST" class="d-flex justify-content-center align-items-center">
+                                {% csrf_token %}
+                                <div class="input-group input-group-sm" style="width: 100px;">
+                                    <button type="submit" name="cantidad" value="{{ item.cantidad|add:'-1' }}" class="btn btn-outline-secondary" {% if item.cantidad == 1 %}disabled{% endif %}>-</button>
+                                    
+                                    <input type="text" class="form-control text-center bg-white" value="{{ item.cantidad }}" readonly>
+                                    
+                                    <button type="submit" name="cantidad" value="{{ item.cantidad|add:'1' }}" class="btn btn-outline-secondary" {% if item.cantidad >= item.variante.stock %}disabled{% endif %}>+</button>
+                                </div>
+                            </form>
+                            
+                            <form action="{% url 'eliminar_item' item.id %}" method="POST" class="mt-2">
+                                {% csrf_token %}
+                                <button type="submit" class="btn btn-link btn-sm text-danger p-0 text-decoration-none small">
+                                    <i class="fas fa-trash-alt me-1"></i> Eliminar
+                                </button>
+                            </form>
+                        </div>
+
+                        <div class="col-6 col-md-3 text-end">
+                            <h5 class="fw-bold mb-0">${{ item.subtotal|floatformat:0 }}</h5>
+                        </div>
+                    </div>
+                    {% endfor %}
+                    
+                    <div class="p-3">
+                        <a href="{% url 'home' %}" class="btn btn-link text-dark text-decoration-none">
+                            <i class="fas fa-arrow-left me-2"></i> Seguir Comprando
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-4">
+            <div class="card border-0 shadow-lg bg-light sticky-top" style="top: 20px;">
+                <div class="card-body p-4">
+                    <h4 class="fw-bold mb-3">Resumen</h4>
+                    <div class="d-flex justify-content-between mb-1">
+                        <span class="text-muted">Subtotal</span>
+                        <span class="fw-bold">${{ total_carrito|floatformat:0 }}</span>
+                    </div>
+                    <div class="d-flex justify-content-between mb-3">
+                        <span class="text-muted">Envío</span>
+                        <span class="text-success small">Se calcula en el siguiente paso</span>
+                    </div>
+                    <hr>
+                    <div class="d-flex justify-content-between mb-4">
+                        <span class="fw-bold fs-5">Total Estimado</span>
+                        <span class="fw-bold fs-4 text-dark">${{ total_carrito|floatformat:0 }}</span>
+                    </div>
+
+                    <a href="{% url 'checkout' %}" class="btn btn-dark w-100 py-3 fw-bold text-uppercase shadow hover-effect">
+                        Proceder al Pago <i class="fas fa-lock ms-2"></i>
+                    </a>
+                    
+                    <div class="mt-4 text-center small text-muted">
+                        <i class="fas fa-shield-alt me-1"></i> Compra 100% Segura<br>
+                        Aceptamos WebPay, Tarjetas y Transferencia.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {% else %}
+    <div class="text-center py-5">
+        <div class="mb-4">
+            <i class="fas fa-shopping-bag fa-4x text-muted opacity-25"></i>
+        </div>
+        <h3 class="fw-bold text-dark">Tu carrito está vacío</h3>
+        <p class="text-muted mb-4">Parece que aún no has añadido productos exclusivos a tu bolsa.</p>
+        <a href="{% url 'home' %}" class="btn btn-dark px-5 py-3 fw-bold">
+            Explorar Colección
+        </a>
+    </div>
+    {% endif %}
+</div>
+
+<style>
+    .hover-effect:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 .5rem 1rem rgba(0,0,0,.15)!important;
+    }
+    /* Input de cantidad estilo */
+    .input-group .btn { border-color: #ced4da; }
+    .input-group .btn:hover { background-color: #e9ecef; }
+</style>
+{% endblock %}
