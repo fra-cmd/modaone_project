@@ -155,5 +155,11 @@ EMAIL_HOST_PASSWORD = 'jexp momo xhgf fwbv'
  # modaone_project/settings.py
 
 # Configuración de IA Replicate
-REPLICATE_API_TOKEN = os.environ.get('REPLICATE_API_TOKEN')
+api_token = os.environ.get('REPLICATE_API_TOKEN')
 DATA_UPLOAD_MAX_MEMORY_SIZE = 10485760
+# settings.py
+
+# ... al final del archivo ...
+
+# IMPORTANTE: Cambia esto por TU link real de Render
+CSRF_TRUSTED_ORIGINS = ['https://modaone-proyecto.onrender.com']
