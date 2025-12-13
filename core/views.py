@@ -590,3 +590,71 @@ def procesar_ia_tryon(request):
             return JsonResponse({'status': 'error', 'message': f'Error interno: {str(e)}'}, status=500)
 
     return JsonResponse({'status': 'error', 'message': 'Método no permitido'}, status=405)
+
+@login_required
+@user_passes_test(is_staff_or_superuser, login_url='staff_login')
+def dashboard_expansion(request):
+    """
+    PÁGINA 2: Expansión de Negocio.
+    """
+    filtro = request.GET.get('filtro', 'mes')
+    
+    hoy = timezone.now()
+    inicio = None
+    fin = hoy
+    titulo_periodo = "Análisis General"
+
+    if filtro == 'semana':
+        inicio = hoy - timedelta(days=7)
+        titulo_periodo = "Última Semana"
+    elif filtro == 'mes':
+        inicio = hoy - timedelta(days=30)
+        titulo_periodo = "Último Mes"
+    elif filtro == 'trimestre':
+        inicio = hoy - timedelta(days=90)
+        titulo_periodo = "Último Trimestre"
+    elif filtro == 'semestre1':
+        inicio = hoy.replace(month=1, day=1, hour=0, minute=0)
+        fin = hoy.replace(month=6, day=30, hour=23, minute=59)
+        titulo_periodo = f"Primer Semestre {hoy.year}"
+    elif filtro == 'semestre2':
+        inicio = hoy.replace(month=7, day=1, hour=0, minute=0)
+        fin = hoy.replace(month=12, day=31, hour=23, minute=59)
+        titulo_periodo = f"Segundo Semestre {hoy.year}"
+    elif filtro == 'anio':
+        inicio = hoy.replace(month=1, day=1, hour=0, minute=0)
+        titulo_periodo = f"Año {hoy.year}"
+
+    # Ranking
+    items_vendidos = ItemOrden.objects.filter(
+        orden__estado__in=['CONFIRMADO', 'DESPACHO', 'ENTREGADO']
+    )
+    if inicio:
+        items_vendidos = items_vendidos.filter(orden__fecha_creacion__range=(inicio, fin))
+
+    ranking = items_vendidos.values('variante__producto__nombre')\
+        .annotate(total=Sum('cantidad'))\
+        .order_by('-total')
+
+    # Estacionalidad
+    todas = ItemOrden.objects.filter(orden__estado__in=['CONFIRMADO', 'DESPACHO', 'ENTREGADO'])
+    ventas_verano = todas.filter(orden__fecha_creacion__month__in=[12, 1, 2, 3]).count()
+    ventas_invierno = todas.filter(orden__fecha_creacion__month__in=[6, 7, 8, 9]).count()
+    
+    # Alertas
+    alertas = []
+    bajos = Variante.objects.filter(stock__lte=5, stock__gt=0)
+    for b in bajos:
+        v = ItemOrden.objects.filter(variante=b, orden__fecha_creacion__gte=hoy-timedelta(days=30)).count()
+        if v > 0:
+            alertas.append(b)
+
+    contexto = {
+        'ranking': ranking,
+        'filtro_actual': filtro,
+        'titulo': titulo_periodo,
+        'clima': {'verano': ventas_verano, 'invierno': ventas_invierno},
+        'alertas': alertas
+    }
+    
+    return render(request, 'core/dashboard_expansion.html', contexto)
