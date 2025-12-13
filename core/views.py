@@ -33,6 +33,10 @@ from .models import Producto, Variante, Carrito, ItemCarrito, Direccion, Orden, 
 from .forms import ClienteRegistrationForm, DireccionForm
 
 
+from django.db.models.functions import ExtractMonth
+from django.utils import timezone
+import datetime
+
 # --- FUNCIONES AUXILIARES ---
 
 def is_staff_or_superuser(user):
@@ -375,37 +379,85 @@ def dashboard_bi(request):
 
 @user_passes_test(is_staff_or_superuser, login_url='staff_login')
 def generar_reporte_gestion(request):
-    """Genera PDF de Gestión BI"""
+    """Genera PDF de Gestión BI CON DATOS NUEVOS"""
+    
+    # 1. Definir rango de fechas (Por defecto último mes)
     fecha_fin = timezone.now()
     fecha_inicio = fecha_fin - timedelta(days=30)
 
+    # 2. Filtrar órdenes
     ordenes = Orden.objects.filter(fecha_creacion__range=(fecha_inicio, fecha_fin)).exclude(estado='CANCELADO')
+    
+    # 3. KPIs Básicos
     total_ventas = ordenes.aggregate(Sum('total_final'))['total_final__sum'] or 0
     total_pedidos = ordenes.count()
     ticket_promedio = total_ventas / total_pedidos if total_pedidos > 0 else 0
 
+    # 4. Top Productos
     top_productos = ItemOrden.objects.filter(orden__fecha_creacion__range=(fecha_inicio, fecha_fin)) \
         .values('nombre_producto') \
         .annotate(total_vendido=Sum('cantidad')) \
         .order_by('-total_vendido')[:5]
 
+    # 5. Probador Virtual
     top_tryon = RegistroTryOn.objects.filter(fecha__range=(fecha_inicio, fecha_fin)) \
         .values('producto__nombre') \
         .annotate(veces_probado=Count('id')) \
         .order_by('-veces_probado')[:5]
 
+    # --- NUEVO: CÁLCULOS PARA EL PDF ---
+    
+    # A. Predicciones de Stock (Alertas)
+    alertas_stock = []
+    variantes_criticas = Variante.objects.filter(stock__lte=5, stock__gt=0)
+    for v in variantes_criticas:
+        # Ventas últimos 30 días para calcular ritmo
+        ventas_mes = ItemOrden.objects.filter(
+            variante=v, 
+            orden__fecha_creacion__gte=fecha_inicio
+        ).aggregate(sum=Sum('cantidad'))['sum'] or 0
+        
+        if ventas_mes > 0:
+            ritmo = ventas_mes / 30
+            dias = int(v.stock / ritmo) if ritmo > 0 else 99
+            if dias < 15: # Alerta si dura menos de 15 días
+                alertas_stock.append({
+                    'producto': f"{v.producto.nombre} ({v.talla})",
+                    'stock': v.stock,
+                    'dias': dias
+                })
+
+    # B. Estacionalidad Simple (Comparación Histórica)
+    # Calculamos todo el histórico para ver tendencia Verano vs Invierno
+    verano_total = ItemOrden.objects.filter(orden__fecha_creacion__month__in=[12, 1, 2, 3]).aggregate(s=Sum('cantidad'))['s'] or 0
+    invierno_total = ItemOrden.objects.filter(orden__fecha_creacion__month__in=[6, 7, 8, 9]).aggregate(s=Sum('cantidad'))['s'] or 0
+    
+    if (verano_total + invierno_total) > 0:
+        pct_verano = round((verano_total / (verano_total + invierno_total)) * 100, 1)
+        pct_invierno = round((invierno_total / (verano_total + invierno_total)) * 100, 1)
+    else:
+        pct_verano, pct_invierno = 0, 0
+
+    # Contexto final para el PDF
     contexto = {
-        'fecha_inicio': fecha_inicio, 'fecha_fin': fecha_fin,
-        'total_ventas': total_ventas, 'total_pedidos': total_pedidos,
-        'ticket_promedio': ticket_promedio, 'top_productos': top_productos,
-        'top_tryon': top_tryon, 'generado_por': request.user.username
+        'fecha_inicio': fecha_inicio, 
+        'fecha_fin': fecha_fin,
+        'total_ventas': total_ventas, 
+        'total_pedidos': total_pedidos,
+        'ticket_promedio': ticket_promedio, 
+        'top_productos': top_productos,
+        'top_tryon': top_tryon, 
+        'generado_por': request.user.username,
+        # Nuevos datos
+        'alertas_stock': alertas_stock,
+        'estacionalidad': {'verano': pct_verano, 'invierno': pct_invierno}
     }
     
     html = render_to_string('core/reporte_bi_pdf.html', contexto)
     pdf = BytesIO()
     pisa.CreatePDF(html, dest=pdf)
     response = HttpResponse(pdf.getvalue(), content_type='application/pdf')
-    response['Content-Disposition'] = 'inline; filename="Informe_Gestion.pdf"'
+    response['Content-Disposition'] = 'inline; filename="Informe_Gestion_BI.pdf"'
     return response
 
 # --- IA TRY-ON (Replicate Real + Registro BI) ---
@@ -587,3 +639,108 @@ def panel_clientes(request):
         })
 
     return render(request, 'core/panel_clientes.html', {'clientes': lista_clientes})
+
+@login_required
+@user_passes_test(is_staff_or_superuser, login_url='staff_login')
+def api_dashboard_data(request):
+    """
+    API Cerebro: Calcula KPIs, Estacionalidad y Predicciones para el Dashboard.
+    """
+    # 1. FILTRO TEMPORAL (Para el gráfico principal)
+    periodo = request.GET.get('periodo', 'historico') # default: todo el tiempo
+    
+    hoy = timezone.now()
+    fecha_inicio = None
+    
+    if periodo == 'semana':
+        fecha_inicio = hoy - datetime.timedelta(days=7)
+    elif periodo == 'mes':
+        fecha_inicio = hoy - datetime.timedelta(days=30)
+    elif periodo == 'trimestre':
+        fecha_inicio = hoy - datetime.timedelta(days=90)
+    elif periodo == 'anio':
+        fecha_inicio = hoy - datetime.timedelta(days=365)
+    
+    # QueryBase: Solo órdenes pagadas
+    ordenes_validas = Orden.objects.exclude(estado='CANCELADO')
+    
+    if fecha_inicio:
+        ordenes_filtradas = ordenes_validas.filter(fecha_creacion__gte=fecha_inicio)
+    else:
+        ordenes_filtradas = ordenes_validas
+
+    # --- DATOS GENERALES (KPIs) ---
+    total_ventas = ordenes_filtradas.aggregate(Sum('total_final'))['total_final__sum'] or 0
+    total_pedidos = ordenes_filtradas.count()
+    
+    # --- TOP PRODUCTOS (Dinámico según filtro) ---
+    # Unimos con ItemOrden -> Variante -> Producto para agrupar por nombre del producto padre
+    top_productos = ItemOrden.objects.filter(orden__in=ordenes_filtradas)\
+        .values('variante__producto__nombre')\
+        .annotate(total_vendido=Sum('cantidad'))\
+        .order_by('-total_vendido')[:5]
+
+    data_top_productos = [
+        {'nombre': item['variante__producto__nombre'], 'cantidad': item['total_vendido']} 
+        for item in top_productos if item['variante__producto__nombre']
+    ]
+
+    # --- ESTADOS DEL PEDIDO (Para el gráfico circular) ---
+    # Contamos cuántas órdenes hay en cada estado
+    conteo_estados = ordenes_filtradas.values('estado').annotate(total=Count('id'))
+    data_estados = {item['estado']: item['total'] for item in conteo_estados}
+
+    # =======================================================
+    # LO NUEVO: INTELIGENCIA DE NEGOCIO (REQUERIMIENTO PROFE)
+    # =======================================================
+
+    # A. ANÁLISIS ESTACIONAL (Invierno vs Verano)
+    # Verano: Dic, Ene, Feb, Mar (Meses 12, 1, 2, 3)
+    # Invierno: Jun, Jul, Ago, Sep (Meses 6, 7, 8, 9)
+    
+    ventas_verano = ItemOrden.objects.filter(
+        orden__fecha_creacion__month__in=[12, 1, 2, 3]
+    ).aggregate(total=Sum('cantidad'))['total'] or 0
+    
+    ventas_invierno = ItemOrden.objects.filter(
+        orden__fecha_creacion__month__in=[6, 7, 8, 9]
+    ).aggregate(total=Sum('cantidad'))['total'] or 0
+
+    # B. PREDICCIÓN DE INVENTARIO (Alertas Inteligentes)
+    # Buscamos variantes con stock bajo (menos de 5) pero que se hayan vendido recientemente
+    alertas_stock = []
+    variantes_bajo_stock = Variante.objects.filter(stock__lte=5, stock__gt=0)
+    
+    for v in variantes_bajo_stock:
+        # Calculamos ventas de los últimos 30 días para este producto
+        ventas_mes = ItemOrden.objects.filter(
+            variante=v, 
+            orden__fecha_creacion__gte=hoy - datetime.timedelta(days=30)
+        ).aggregate(sum=Sum('cantidad'))['sum'] or 0
+        
+        # Si se vende más de 0 al mes y queda poco stock, es alerta crítica
+        if ventas_mes > 0:
+            ritmo_venta = ventas_mes / 30 # ventas por día
+            dias_restantes = int(v.stock / ritmo_venta) if ritmo_venta > 0 else 99
+            
+            if dias_restantes < 10: # Si se va a acabar en menos de 10 días
+                alertas_stock.append({
+                    'producto': f"{v.producto.nombre} ({v.talla})",
+                    'stock_actual': v.stock,
+                    'dias_estimados': dias_restantes,
+                    'mensaje': f"Se agotará en {dias_restantes} días al ritmo actual."
+                })
+
+    return JsonResponse({
+        'kpis': {
+            'ventas': total_ventas,
+            'pedidos': total_pedidos,
+        },
+        'top_productos': data_top_productos,
+        'estados': data_estados,
+        'estacionalidad': {
+            'verano': ventas_verano,
+            'invierno': ventas_invierno
+        },
+        'alertas_stock': alertas_stock
+    })

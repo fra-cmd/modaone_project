@@ -57,4 +57,6 @@ urlpatterns = [
     path('api/registrar-tryon/', views.registrar_evento_tryon, name='registrar_tryon'),
 
     path('admin-panel/clientes/', views.panel_clientes, name='panel_clientes'),
+    # Agrega esta línea en la sección de API o Backoffice
+path('api/bi-data/', views.api_dashboard_data, name='api_bi_data'),
 ]
