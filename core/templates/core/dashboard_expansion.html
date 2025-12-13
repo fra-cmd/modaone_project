@@ -1,11 +1,9 @@
 {% extends 'base_admin.html' %}
-{% load humanize %}
-
 {% block title %}Estrategia de Expansión | ModaOne{% endblock %}
 
 {% block content %}
 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
-    <h1 class="h2">Estrategia y Expansión (Página 2)</h1>
+    <h1 class="h2">Estrategia y Expansión</h1>
     <a href="{% url 'dashboard_bi' %}" class="btn btn-outline-secondary btn-sm">
         <i class="fas fa-arrow-left"></i> Volver a KPIs Generales
     </a>
@@ -63,7 +61,8 @@
                         {% empty %}
                         <tr>
                             <td colspan="3" class="text-center py-4 text-muted">
-                                No se registraron ventas confirmadas en este periodo.
+                                <i class="fas fa-box-open fa-2x mb-2"></i><br>
+                                No se encontraron ventas en este periodo.
                             </td>
                         </tr>
                         {% endfor %}
@@ -74,37 +73,38 @@
     </div>
 
     <div class="col-md-5">
+        
         <div class="card shadow-sm mb-4">
             <div class="card-header fw-bold bg-primary text-white">
                 <i class="fas fa-cloud-sun"></i> Inteligencia Estacional
             </div>
             <div class="card-body">
-                <p class="small text-muted mb-3">Comparamos tus ventas históricas para saber en qué estación vendes más.</p>
+                <p class="small text-muted mb-3">Comparativa histórica (Todo el tiempo):</p>
                 
-                <div class="d-flex justify-content-between align-items-center mb-2">
+                <div class="d-flex justify-content-between align-items-center mb-1">
                     <span>☀️ Verano (Dic-Mar)</span>
                     <span class="fw-bold">{{ clima.verano }} ventas</span>
                 </div>
                 <div class="progress mb-3" style="height: 10px;">
-                    <div class="progress-bar bg-warning" role="progressbar" style="width: {{ clima.verano }}0px;"></div>
+                    <div class="progress-bar bg-warning" role="progressbar" style="width: 50%"></div>
                 </div>
 
-                <div class="d-flex justify-content-between align-items-center mb-2">
+                <div class="d-flex justify-content-between align-items-center mb-1">
                     <span>❄️ Invierno (Jun-Sep)</span>
                     <span class="fw-bold">{{ clima.invierno }} ventas</span>
                 </div>
                 <div class="progress mb-3" style="height: 10px;">
-                    <div class="progress-bar bg-info" role="progressbar" style="width: {{ clima.invierno }}0px;"></div>
+                    <div class="progress-bar bg-info" role="progressbar" style="width: 50%"></div>
                 </div>
 
                 <div class="alert alert-light border mt-3 small">
-                    <strong>Conclusión:</strong>
+                    <strong>Conclusión IA:</strong><br>
                     {% if clima.verano > clima.invierno %}
-                        Tu negocio es fuerte en <strong>Verano</strong>. Asegura stock de poleras antes de Diciembre.
+                        Tu fuerte es el <strong>Verano</strong>. <br>Recomendación: Stockea poleras en Noviembre.
                     {% elif clima.invierno > clima.verano %}
-                        Tu negocio es fuerte en <strong>Invierno</strong>. Compra parkas y polerones en Mayo.
+                        Tu fuerte es el <strong>Invierno</strong>. <br>Recomendación: Stockea parkas en Mayo.
                     {% else %}
-                        Tus ventas son estables todo el año.
+                        Tus ventas son estables o no hay suficientes datos aún.
                     {% endif %}
                 </div>
             </div>
@@ -112,14 +112,14 @@
 
         <div class="card shadow-sm border-danger">
             <div class="card-header bg-danger text-white fw-bold">
-                <i class="fas fa-exclamation-triangle"></i> Reposición Urgente
+                <i class="fas fa-exclamation-triangle"></i> Reposición Urgente (Stock Bajo)
             </div>
             <ul class="list-group list-group-flush">
                 {% for item in alertas %}
                 <li class="list-group-item d-flex justify-content-between align-items-center">
                     <div>
-                        <strong>{{ item.producto.nombre }}</strong> <br>
-                        <small class="text-muted">Talla: {{ item.talla }} | Color: {{ item.color }}</small>
+                        <strong>{{ item.producto.nombre }}</strong>
+                        <div class="small text-muted">Talla: {{ item.talla }} | Color: {{ item.color }}</div>
                     </div>
                     <span class="badge bg-danger rounded-pill">Quedan {{ item.stock }}</span>
                 </li>

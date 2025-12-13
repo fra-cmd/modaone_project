@@ -1,49 +1,68 @@
 # core/views.py
 
+# ======================
+# IMPORTS ESTÁNDAR PYTHON
+# ======================
 import os
 import json
 import base64
-import requests
-from io import BytesIO
 import time
-from django.contrib.auth import authenticate, login
-from django.contrib import messages
-from django.shortcuts import render, redirect, get_object_or_404
-from django.contrib.auth.decorators import login_required, user_passes_test
-from django.contrib.auth.models import User
-from django.contrib import messages
-from django.db.models import Sum, Q, Count
-from django.core.paginator import Paginator
-from django.db import transaction
-from django.http import HttpResponse, JsonResponse
-from django.core.mail import EmailMessage
-from django.template.loader import render_to_string
-from django.conf import settings
-from django.views.decorators.csrf import csrf_exempt
-from django.core.files.base import ContentFile
-from django.utils import timezone
+from io import BytesIO
 from datetime import timedelta
 
-# Librerías externas
+# ======================
+# IMPORTS DJANGO
+# ======================
+from django.conf import settings
+from django.contrib import messages
+from django.contrib.auth import authenticate, login
+from django.contrib.auth.decorators import login_required, user_passes_test
+from django.contrib.auth.models import User
+from django.core.files.base import ContentFile
+from django.core.mail import EmailMessage
+from django.core.paginator import Paginator
+from django.db import transaction
+from django.db.models import Sum, Q, Count
+from django.http import HttpResponse, JsonResponse
+from django.shortcuts import render, redirect, get_object_or_404
+from django.template.loader import render_to_string
+from django.utils import timezone
+from django.views.decorators.csrf import csrf_exempt
+
+# ======================
+# LIBRERÍAS EXTERNAS
+# ======================
 from xhtml2pdf import pisa
 import replicate
+import requests
 
-# Modelos y Formularios
-from .models import Producto, Variante, Carrito, ItemCarrito, Direccion, Orden, ItemOrden, ESTADOS_PEDIDO, RegistroTryOn
+# ======================
+# MODELOS Y FORMULARIOS
+# ======================
+from .models import (
+    Producto, Variante, Carrito, ItemCarrito,
+    Direccion, Orden, ItemOrden,
+    ESTADOS_PEDIDO, RegistroTryOn
+)
 from .forms import ClienteRegistrationForm, DireccionForm
 
 
-# --- FUNCIONES AUXILIARES ---
+# ==================================================
+# FUNCIONES AUXILIARES
+# ==================================================
 
 def is_staff_or_superuser(user):
     """Verifica permisos de Admin/Staff"""
     return user.is_staff or user.is_superuser
 
-# --- VISTAS PÚBLICAS (CLIENTE) ---
+
+# ==================================================
+# VISTAS PÚBLICAS (CLIENTE)
+# ==================================================
 
 def catalogo_digital(request):
     productos_list = Producto.objects.filter(activo=True).order_by('-fecha_creacion')
-    
+
     query = request.GET.get('q')
     if query:
         productos_list = productos_list.filter(Q(nombre__icontains=query) | Q(descripcion__icontains=query))
@@ -51,23 +70,27 @@ def catalogo_digital(request):
     cat_filter = request.GET.get('categoria')
     if cat_filter:
         productos_list = productos_list.filter(categoria=cat_filter)
-        
+
     marca_filter = request.GET.get('marca')
     if marca_filter:
         productos_list = productos_list.filter(marca=marca_filter)
 
     min_price = request.GET.get('min_price')
     max_price = request.GET.get('max_price')
-    if min_price: productos_list = productos_list.filter(precio__gte=min_price)
-    if max_price: productos_list = productos_list.filter(precio__lte=max_price)
+    if min_price:
+        productos_list = productos_list.filter(precio__gte=min_price)
+    if max_price:
+        productos_list = productos_list.filter(precio__lte=max_price)
 
-    paginator = Paginator(productos_list, 9) 
+    paginator = Paginator(productos_list, 9)
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
 
     titulo = "Catálogo Completo"
-    if cat_filter: titulo = f"Colección {cat_filter.capitalize()}"
-    if marca_filter: titulo = f"Marca: {marca_filter.capitalize()}"
+    if cat_filter:
+        titulo = f"Colección {cat_filter.capitalize()}"
+    if marca_filter:
+        titulo = f"Marca: {marca_filter.capitalize()}"
 
     contexto = {
         'productos': page_obj,
@@ -77,6 +100,7 @@ def catalogo_digital(request):
     }
     return render(request, 'core/catalogo.html', contexto)
 
+
 def registro_cliente(request):
     if request.method == 'POST':
         form = ClienteRegistrationForm(request.POST)
@@ -84,10 +108,11 @@ def registro_cliente(request):
             new_user = form.save(commit=False)
             new_user.set_password(form.cleaned_data['password'])
             new_user.save()
-            return redirect('home') 
+            return redirect('home')
     else:
         form = ClienteRegistrationForm()
     return render(request, 'core/registro.html', {'form': form, 'titulo': 'Registro'})
+
 
 def agregar_al_carrito(request, variante_id):
     if request.method == 'POST' and request.user.is_authenticated:
@@ -96,11 +121,12 @@ def agregar_al_carrito(request, variante_id):
 
         if cantidad > variante.stock:
             messages.error(request, f'Stock insuficiente. Disponible: {variante.stock}')
-            return redirect('home') 
+            return redirect('home')
 
         carrito, _ = Carrito.objects.get_or_create(usuario=request.user)
         item, created = ItemCarrito.objects.get_or_create(
-            carrito=carrito, variante=variante,
+            carrito=carrito,
+            variante=variante,
             defaults={'cantidad': cantidad, 'precio_unitario': variante.producto.precio}
         )
         if not created:
@@ -108,9 +134,10 @@ def agregar_al_carrito(request, variante_id):
             item.save()
 
         messages.success(request, f'Añadido: {variante.producto.nombre}')
-        return redirect(request.META.get('HTTP_REFERER', 'home')) 
+        return redirect(request.META.get('HTTP_REFERER', 'home'))
 
     return redirect('login')
+
 
 def agregar_desde_catalogo(request, producto_id):
     if request.method == 'POST':
@@ -121,21 +148,23 @@ def agregar_desde_catalogo(request, producto_id):
         if not variante_id:
             messages.error(request, "Selecciona una talla.")
             return redirect('home')
-            
+
         variante = get_object_or_404(Variante, id=variante_id)
-        
+
         carrito, _ = Carrito.objects.get_or_create(usuario=request.user)
         item, created = ItemCarrito.objects.get_or_create(
-            carrito=carrito, variante=variante,
+            carrito=carrito,
+            variante=variante,
             defaults={'precio_unitario': variante.producto.precio}
         )
         if not created:
             item.cantidad += 1
             item.save()
-            
+
         messages.success(request, "Producto añadido al carrito.")
         return redirect('home')
     return redirect('home')
+
 
 @login_required
 def ver_carrito(request):
@@ -147,8 +176,11 @@ def ver_carrito(request):
         carrito, items, total_carrito = None, [], 0
 
     return render(request, 'core/carrito.html', {
-        'items': items, 'total_carrito': total_carrito, 'titulo': 'Mi Carrito'
+        'items': items,
+        'total_carrito': total_carrito,
+        'titulo': 'Mi Carrito'
     })
+
 
 @login_required
 def eliminar_item(request, item_id):
@@ -157,32 +189,39 @@ def eliminar_item(request, item_id):
         item.delete()
     return redirect('ver_carrito')
 
+
 @login_required
 def actualizar_cantidad(request, item_id):
     if request.method == 'POST':
         item = get_object_or_404(ItemCarrito, id=item_id, carrito__usuario=request.user)
         try:
             nueva = int(request.POST.get('cantidad'))
-            if nueva <= 0: item.delete()
-            elif nueva > item.variante.stock: messages.error(request, 'Stock insuficiente.')
-            else: 
+            if nueva <= 0:
+                item.delete()
+            elif nueva > item.variante.stock:
+                messages.error(request, 'Stock insuficiente.')
+            else:
                 item.cantidad = nueva
                 item.save()
-        except ValueError: pass
+        except ValueError:
+            pass
     return redirect('ver_carrito')
+
 
 @login_required
 def checkout(request):
     try:
         carrito = Carrito.objects.get(usuario=request.user)
         items = carrito.items.all()
-        if not items: return redirect('home')
+        if not items:
+            return redirect('home')
         subtotal = sum(item.subtotal for item in items)
         total_items = items.count()
-    except Carrito.DoesNotExist: return redirect('home')
+    except Carrito.DoesNotExist:
+        return redirect('home')
 
     direcciones = Direccion.objects.filter(usuario=request.user).order_by('-predeterminada')
-    
+
     if request.method == 'POST':
         form = DireccionForm(request.POST)
         if form.is_valid():
@@ -194,30 +233,40 @@ def checkout(request):
             return redirect('checkout')
     else:
         form = DireccionForm()
-    
-    costos = [{'id': 1, 'nombre': 'Courier Nacional', 'costo': 5990}, {'id': 2, 'nombre': 'Flash Local', 'costo': 3990}]
+
+    costos = [
+        {'id': 1, 'nombre': 'Courier Nacional', 'costo': 5990},
+        {'id': 2, 'nombre': 'Flash Local', 'costo': 3990}
+    ]
 
     return render(request, 'core/checkout.html', {
-        'items': items, 'subtotal': subtotal, 'total_items': total_items,
-        'direcciones_guardadas': direcciones, 'direccion_form': form, 'costos_envio': costos,
+        'items': items,
+        'subtotal': subtotal,
+        'total_items': total_items,
+        'direcciones_guardadas': direcciones,
+        'direccion_form': form,
+        'costos_envio': costos,
         'titulo': 'Checkout'
     })
 
+
 @login_required
-@transaction.atomic 
+@transaction.atomic
 def generar_orden(request):
-    if request.method != 'POST': return redirect('checkout')
+    if request.method != 'POST':
+        return redirect('checkout')
 
     direccion_id = request.POST.get('direccion_id')
-    metodo_envio = request.POST.get('metodo_envio') 
+    metodo_envio = request.POST.get('metodo_envio')
     email_contacto = request.POST.get('email_contacto')
 
     try:
         direccion = get_object_or_404(Direccion, id=direccion_id, usuario=request.user)
         carrito = Carrito.objects.get(usuario=request.user)
         items = list(carrito.items.all())
-        if not items: return redirect('checkout')
-    except:
+        if not items:
+            return redirect('checkout')
+    except Exception:
         messages.error(request, 'Error en los datos.')
         return redirect('checkout')
 
@@ -235,372 +284,18 @@ def generar_orden(request):
         estado='PENDIENTE',
         direccion_envio=f"{direccion.calle} #{direccion.numero}, {direccion.comuna}",
     )
-    
+
     for i in items:
         ItemOrden.objects.create(
-            orden=orden, variante=i.variante, nombre_producto=i.variante.producto.nombre,
-            talla_color=f"{i.variante.talla}/{i.variante.color}", cantidad=i.cantidad, precio_unitario=i.precio_unitario
+            orden=orden,
+            variante=i.variante,
+            nombre_producto=i.variante.producto.nombre,
+            talla_color=f"{i.variante.talla}/{i.variante.color}",
+            cantidad=i.cantidad,
+            precio_unitario=i.precio_unitario
         )
         i.variante.stock -= i.cantidad
         i.variante.save()
-        
-    carrito.delete() 
+
+    carrito.delete()
     return redirect('pasarela_pago', orden_id=orden.id)
-
-@login_required
-def pasarela_pago(request, orden_id):
-    orden = get_object_or_404(Orden, id=orden_id, usuario=request.user)
-    if orden.estado != 'PENDIENTE': return redirect('home')
-    return render(request, 'core/pasarela_pago.html', {'orden': orden})
-
-@login_required
-def procesar_pago_real(request, orden_id):
-    orden = get_object_or_404(Orden, id=orden_id, usuario=request.user)
-    if request.method == 'POST':
-        orden.estado = 'CONFIRMADO'
-        orden.save()
-        
-        # Generar PDF
-        html = render_to_string('core/invoice.html', {'orden': orden})
-        pdf = BytesIO()
-        pisa.CreatePDF(html, dest=pdf)
-        
-        # Enviar Email
-        if orden.email:
-            email = EmailMessage(
-                f'Tu Boleta - Orden #{orden.numero_orden}',
-                f'Hola {orden.usuario.first_name}, tu compra está confirmada.',
-                settings.EMAIL_HOST_USER, [orden.email]
-            )
-            email.attach(f'boleta_{orden.numero_orden}.pdf', pdf.getvalue(), 'application/pdf')
-            try: email.send()
-            except: pass
-
-        return render(request, 'core/orden_confirmada.html', {'orden': orden})
-    return redirect('home')
-
-@login_required
-def descargar_boleta(request, orden_id):
-    orden = get_object_or_404(Orden, id=orden_id, usuario=request.user)
-    html = render_to_string('core/invoice.html', {'orden': orden})
-    response = HttpResponse(content_type='application/pdf')
-    response['Content-Disposition'] = f'attachment; filename="Boleta_{orden.numero_orden}.pdf"'
-    pisa.CreatePDF(html, dest=response)
-    return response
-
-@login_required
-def pago_simulado(request, orden_id):
-    return redirect('pasarela_pago', orden_id=orden_id)
-
-@login_required
-def mis_pedidos(request):
-    ordenes = Orden.objects.filter(usuario=request.user).order_by('-fecha_creacion')
-    return render(request, 'core/mis_pedidos.html', {'ordenes': ordenes, 'titulo': 'Mis Pedidos'})
-
-# --- BACKOFFICE Y BI ---
-
-@user_passes_test(is_staff_or_superuser, login_url='staff_login') # <--- ESTO ES CRUCIAL
-def panel_admin_productos(request):
-    return render(request, 'core/panel_admin.html', {'titulo': 'Panel Admin'})
-
-@login_required
-@user_passes_test(is_staff_or_superuser, login_url='staff_login')
-def admin_ordenes(request):
-    # Traemos las órdenes y optimizamos la consulta para traer los datos del usuario y sus direcciones
-    ordenes = Orden.objects.select_related('usuario').prefetch_related('usuario__direcciones').all().order_by('-fecha_creacion')
-    
-    return render(request, 'core/panel_ordenes.html', {
-        'ordenes': ordenes, 
-        'estados': ESTADOS_PEDIDO
-    })
-
-# En core/views.py
-
-@login_required
-@user_passes_test(is_staff_or_superuser, login_url='staff_login')
-def cambiar_estado_orden(request, orden_id):
-    if request.method == 'POST':
-        orden = get_object_or_404(Orden, id=orden_id)
-        nuevo_estado = request.POST.get('nuevo_estado')
-        tracking = request.POST.get('tracking_id')
-        
-        # Guardamos el estado anterior para verificar si cambió
-        estado_anterior = orden.estado
-        
-        if nuevo_estado:
-            orden.estado = nuevo_estado
-            if tracking:
-                orden.codigo_seguimiento = tracking
-            orden.save()
-            
-            # --- LÓGICA DE NOTIFICACIÓN POR CORREO ---
-            if nuevo_estado != estado_anterior and orden.email:
-                asunto = f"Actualización de tu Orden #{orden.numero_orden}"
-                mensaje = ""
-                
-                # Detectar tipo de envío (Flash vs Courier)
-                es_courier = int(orden.costo_envio) == 5990
-                
-                if nuevo_estado == 'CONFIRMADO':
-                    mensaje = f"Hola {orden.usuario.first_name}, tu pago está confirmado. Estamos preparando tu pedido."
-                
-                elif nuevo_estado == 'DESPACHO':
-                    if es_courier:
-                        track_msg = f"Tu código de seguimiento es: {orden.codigo_seguimiento}" if orden.codigo_seguimiento else "Pronto recibirás tu código."
-                        mensaje = f"¡Tu pedido va en camino! Lo hemos entregado al Courier. {track_msg}"
-                    else:
-                        # Mensaje Flash
-                        mensaje = f"¡Tu pedido va en camino! Nuestro repartidor Flash ha salido a ruta hacia {orden.direccion_envio}."
-                
-                elif nuevo_estado == 'ENTREGADO':
-                    mensaje = f"¡Pedido Entregado! Gracias por comprar en ModaOne. Esperamos que lo disfrutes."
-
-                # Enviar correo si hay mensaje definido
-                if mensaje:
-                    try:
-                        email = EmailMessage(asunto, mensaje, settings.EMAIL_HOST_USER, [orden.email])
-                        email.send()
-                    except:
-                        pass # No detener el sistema si falla el correo
-            
-            messages.success(request, f'Orden #{orden.numero_orden} actualizada a {orden.get_estado_display()}.')
-            
-    return redirect('admin_ordenes')
-
-@login_required
-@user_passes_test(is_staff_or_superuser, login_url='staff_login')
-def dashboard_bi(request):
-    """Vista principal del Dashboard de BI"""
-    return render(request, 'core/dashboard_bi.html', {'titulo': 'Inteligencia de Negocios'})
-
-@user_passes_test(is_staff_or_superuser, login_url='staff_login')
-def generar_reporte_gestion(request):
-    """Genera PDF de Gestión BI"""
-    fecha_fin = timezone.now()
-    fecha_inicio = fecha_fin - timedelta(days=30)
-
-    ordenes = Orden.objects.filter(fecha_creacion__range=(fecha_inicio, fecha_fin)).exclude(estado='CANCELADO')
-    total_ventas = ordenes.aggregate(Sum('total_final'))['total_final__sum'] or 0
-    total_pedidos = ordenes.count()
-    ticket_promedio = total_ventas / total_pedidos if total_pedidos > 0 else 0
-
-    top_productos = ItemOrden.objects.filter(orden__fecha_creacion__range=(fecha_inicio, fecha_fin)) \
-        .values('nombre_producto') \
-        .annotate(total_vendido=Sum('cantidad')) \
-        .order_by('-total_vendido')[:5]
-
-    top_tryon = RegistroTryOn.objects.filter(fecha__range=(fecha_inicio, fecha_fin)) \
-        .values('producto__nombre') \
-        .annotate(veces_probado=Count('id')) \
-        .order_by('-veces_probado')[:5]
-
-    contexto = {
-        'fecha_inicio': fecha_inicio, 'fecha_fin': fecha_fin,
-        'total_ventas': total_ventas, 'total_pedidos': total_pedidos,
-        'ticket_promedio': ticket_promedio, 'top_productos': top_productos,
-        'top_tryon': top_tryon, 'generado_por': request.user.username
-    }
-    
-    html = render_to_string('core/reporte_bi_pdf.html', contexto)
-    pdf = BytesIO()
-    pisa.CreatePDF(html, dest=pdf)
-    response = HttpResponse(pdf.getvalue(), content_type='application/pdf')
-    response['Content-Disposition'] = 'inline; filename="Informe_Gestion.pdf"'
-    return response
-
-# --- IA TRY-ON (Replicate Real + Registro BI) ---
-
-@login_required
-def try_on_view(request, producto_id):
-    producto = get_object_or_404(Producto, id=producto_id)
-    if not producto.imagen_url:
-        messages.warning(request, 'Producto sin imagen.')
-        return redirect('home')
-    return render(request, 'core/try_on.html', {'producto': producto})
-
-
-@csrf_exempt
-def registrar_evento_tryon(request):
-    return JsonResponse({'status': 'ok'}) # Legacy, ya integrado arriba
-
-
-# --- AGREGAR AL FINAL DE core/views.py ---
-
-# --- EN core/views.py (Al final) ---
-
-def staff_login_view(request):
-    # Si ya es admin, mándalo directo al panel
-    if request.user.is_authenticated and is_staff_or_superuser(request.user):
-        return redirect('panel_admin') 
-
-    if request.method == 'POST':
-        usuario = request.POST.get('username')
-        clave = request.POST.get('password')
-        user = authenticate(request, username=usuario, password=clave)
-
-        if user is not None:
-            if is_staff_or_superuser(user):
-                login(request, user)
-                return redirect('panel_admin') # <--- Esto fuerza la entrada al dashboard
-            else:
-                messages.error(request, "No tienes permisos de acceso corporativo.")
-        else:
-            messages.error(request, "Credenciales inválidas.")
-    
-    return render(request, 'core/staff_login.html')
-
-# --- En core/views.py ---
-
-# --- En core/views.py ---
-
-@login_required
-@user_passes_test(is_staff_or_superuser, login_url='staff_login')
-def panel_clientes(request):
-    """
-    CRM de Clientes: Segmentación por comportamiento de compra y uso de IA.
-    """
-    # 1. Obtener métricas base de la base de datos
-    clientes = User.objects.filter(is_staff=False).annotate(
-        total_gastado=Sum('orden__total_final', filter=Q(orden__estado__in=['CONFIRMADO', 'DESPACHO', 'ENTREGADO'])),
-        total_ordenes=Count('orden', filter=Q(orden__estado__in=['CONFIRMADO', 'DESPACHO', 'ENTREGADO'])),
-        veces_ia=Count('registrotryon')
-    ).order_by('-total_gastado')
-
-    lista_clientes = []
-    today = timezone.now().date()
-
-    for c in clientes:
-        # 2. Calcular días de inactividad
-        ultima_orden = Orden.objects.filter(usuario=c).order_by('-fecha_creacion').first()
-        dias_sin_compra = (today - ultima_orden.fecha_creacion.date()).days if ultima_orden else None
-        
-        # 3. Definir Perfil (Scoring)
-        perfil = "Nuevo"
-        color = "secondary"
-        
-        gasto = c.total_gastado or 0
-        ordenes = c.total_ordenes or 0
-        uso_ia = c.veces_ia or 0
-        
-        # Lógica de Segmentación
-        if gasto > 50000 or ordenes >= 3:
-            perfil = "💎 VIP"
-            color = "info"
-        elif uso_ia > 3 and ordenes < 1:
-            perfil = "👀 Curioso (IA)"
-            color = "warning"
-        elif ordenes > 0 and dias_sin_compra and dias_sin_compra > 60:
-            perfil = "👻 Inactivo"
-            color = "danger"
-        elif ordenes > 0:
-            perfil = "✅ Cliente"
-            color = "success"
-
-        # 4. CÁLCULO SEGURO DE LA BARRA DE PROGRESO (0 a 100)
-        # Cada uso de IA suma 10%. Máximo 100%.
-        porcentaje_calc = uso_ia * 10
-        if porcentaje_calc > 100:
-            porcentaje_calc = 100
-        
-        # Guardamos todo en un diccionario limpio
-        lista_clientes.append({
-            'usuario': c,
-            'gasto': gasto,
-            'ordenes': ordenes,
-            'uso_ia': uso_ia,
-            'porcentaje_ia': porcentaje_calc, # <--- Variable numérica lista para usar
-            'dias_inactivo': dias_sin_compra,
-            'perfil': perfil,
-            'color': color,
-            'telefono': c.direcciones.last().telefono if c.direcciones.exists() else None
-        })
-
-    return render(request, 'core/panel_clientes.html', {'clientes': lista_clientes})
-
-
-# --- AGREGAR AL FINAL DE core/views.py ---
-
-@login_required
-@user_passes_test(is_staff_or_superuser, login_url='staff_login')
-def dashboard_expansion(request):
-    """
-    PÁGINA 2: Expansión de Negocio (Lo que pidió el profe).
-    Filtra ventas reales por periodos específicos y analiza clima.
-    """
-    filtro = request.GET.get('filtro', 'mes') # Por defecto muestra el último mes
-    
-    hoy = timezone.now()
-    inicio = None
-    fin = hoy
-    titulo_periodo = "Análisis General"
-
-    # --- 1. LÓGICA DE FILTROS DE TIEMPO (Expandir la mente) ---
-    if filtro == 'semana':
-        inicio = hoy - timedelta(days=7)
-        titulo_periodo = "Última Semana"
-    
-    elif filtro == 'mes':
-        inicio = hoy - timedelta(days=30)
-        titulo_periodo = "Último Mes"
-    
-    elif filtro == 'trimestre':
-        inicio = hoy - timedelta(days=90)
-        titulo_periodo = "Último Trimestre"
-        
-    elif filtro == 'semestre1':
-        # Primer Semestre del año actual (Ene - Jun)
-        inicio = hoy.replace(month=1, day=1, hour=0, minute=0)
-        fin = hoy.replace(month=6, day=30, hour=23, minute=59)
-        titulo_periodo = f"Primer Semestre {hoy.year}"
-        
-    elif filtro == 'semestre2':
-        # Segundo Semestre del año actual (Jul - Dic)
-        inicio = hoy.replace(month=7, day=1, hour=0, minute=0)
-        fin = hoy.replace(month=12, day=31, hour=23, minute=59)
-        titulo_periodo = f"Segundo Semestre {hoy.year}"
-        
-    elif filtro == 'anio':
-        inicio = hoy.replace(month=1, day=1, hour=0, minute=0)
-        titulo_periodo = f"Año {hoy.year}"
-
-    # --- 2. CONSULTA DE RANKING (Qué prenda se vende más) ---
-    items_vendidos = ItemOrden.objects.filter(
-        orden__estado__in=['CONFIRMADO', 'DESPACHO', 'ENTREGADO']
-    )
-    
-    if inicio:
-        items_vendidos = items_vendidos.filter(orden__fecha_creacion__range=(inicio, fin))
-
-    # Agrupamos para saber cuál es la prenda ganadora
-    ranking = items_vendidos.values('variante__producto__nombre')\
-        .annotate(total=Sum('cantidad'))\
-        .order_by('-total')
-
-    # --- 3. ESTACIONALIDAD (Invierno vs Verano) ---
-    # Analizamos TODO el historial para ver patrones
-    todas = ItemOrden.objects.filter(orden__estado__in=['CONFIRMADO', 'DESPACHO', 'ENTREGADO'])
-    
-    # Verano: Dic, Ene, Feb, Mar
-    ventas_verano = todas.filter(orden__fecha_creacion__month__in=[12, 1, 2, 3]).count()
-    # Invierno: Jun, Jul, Ago, Sep
-    ventas_invierno = todas.filter(orden__fecha_creacion__month__in=[6, 7, 8, 9]).count()
-    
-    # --- 4. ALERTAS DE REPOSICIÓN (Predicción simple) ---
-    # Productos con poco stock que se han vendido recientemente
-    alertas = []
-    bajos = Variante.objects.filter(stock__lte=5, stock__gt=0)
-    for b in bajos:
-        # Vemos si se vendió en los últimos 30 días
-        v = ItemOrden.objects.filter(variante=b, orden__fecha_creacion__gte=hoy-timedelta(days=30)).count()
-        if v > 0:
-            alertas.append(b)
-
-    contexto = {
-        'ranking': ranking,
-        'filtro_actual': filtro,
-        'titulo': titulo_periodo,
-        'clima': {'verano': ventas_verano, 'invierno': ventas_invierno},
-        'alertas': alertas
-    }
-    
-    return render(request, 'core/dashboard_expansion.html', contexto)
