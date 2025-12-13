@@ -423,60 +423,6 @@ def try_on_view(request, producto_id):
 def registrar_evento_tryon(request):
     return JsonResponse({'status': 'ok'}) # Legacy, ya integrado arriba
 
-@csrf_exempt
-def procesar_ia_tryon(request):
-    """
-    Procesa la IA (Replicate/HuggingFace) Y REGISTRA EL EVENTO PARA BI.
-    """
-    if request.method == 'POST':
-        try:
-            import json
-            data = json.loads(request.body)
-            
-            # Datos para la IA
-            imagen_usuario = data.get('imagen_usuario') 
-            imagen_prenda = data.get('imagen_prenda')
-            categoria = data.get('categoria', 'upper_body')
-            
-            # 1. EJECUTAR IA (Tu código de Replicate o Simulación aquí)
-            # ... (Aquí va tu lógica de os.environ y replicate.run) ...
-            # Supongamos que 'final_image_url' es el resultado de la IA
-            
-            # (Si estás usando simulación o Replicate, asegúrate que 'final_image_url' tenga valor aquí)
-            # Para este ejemplo, pongo la lógica de Replicate resumida:
-            os.environ["REPLICATE_API_TOKEN"] = "r8_clis8HfTKgfUPpTEef1sLCGK8ZqmTiD11Zy10"
-            output = replicate.run(
-                "cuuupid/idm-vton:c871bb9b046607b680449ecbae55fd8c6d945e0a1948644bf2361b3d021d3ff4",
-                input={"human_img": imagen_usuario, "garm_img": imagen_prenda, "garment_des": "clothing", "category": categoria, "crop": False, "seed": 42, "steps": 30}
-            )
-            final_image_url = str(output[0] if isinstance(output, list) else output)
-
-            # --- 2. GUARDAR EL REGISTRO BI (¡ESTO FALTABA!) ---
-            try:
-                prod_id = data.get('producto_id') # Recibimos el ID del HTML
-                if prod_id:
-                    producto_obj = Producto.objects.get(id=prod_id)
-                    
-                    # Si el usuario no está logueado, guardamos como anónimo (None)
-                    usuario_log = request.user if request.user.is_authenticated else None
-                    
-                    # CREAR EL REGISTRO EN LA BASE DE DATOS
-                    RegistroTryOn.objects.create(
-                        producto=producto_obj,
-                        usuario=usuario_log
-                    )
-                    print(f"✅ BI Registrado: Se probó {producto_obj.nombre}")
-            except Exception as e:
-                print(f"⚠️ Error guardando BI: {e}")
-            # --------------------------------------------------
-
-            return JsonResponse({'status': 'success', 'imagen_generada': final_image_url})
-
-        except Exception as e:
-            print(f"❌ Error: {str(e)}")
-            return JsonResponse({'status': 'error', 'message': f'Error: {str(e)}'})
-
-    return JsonResponse({'status': 'error', 'message': 'Método no permitido'})
 
 # --- AGREGAR AL FINAL DE core/views.py ---
 
