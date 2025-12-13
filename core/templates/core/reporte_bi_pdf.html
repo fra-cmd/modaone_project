@@ -2,120 +2,45 @@
 <html>
 <head>
 <style>
-    body { font-family: Helvetica, sans-serif; color: #333; }
-    .header { text-align: center; border-bottom: 3px solid #0056b3; margin-bottom: 20px; padding-bottom: 10px; }
-    h1 { color: #0056b3; margin: 0; font-size: 24px; }
-    p.meta { color: #666; font-size: 12px; margin-top: 5px; }
-    
-    /* KPIs */
-    .kpi-container { text-align: center; margin-bottom: 30px; }
-    .kpi-box { background: #f8f9fa; border: 1px solid #ddd; padding: 15px; display: inline-block; width: 30%; text-align: center; margin: 0 1%; border-radius: 5px; }
-    .kpi-title { font-size: 12px; text-transform: uppercase; color: #666; display: block; margin-bottom: 5px; }
-    .valor { font-size: 20px; font-weight: bold; color: #333; display: block; }
-    
-    /* Tablas */
-    h3 { border-left: 5px solid #0056b3; padding-left: 10px; margin-top: 25px; color: #444; font-size: 16px; }
-    table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 12px; }
-    th { background: #0056b3; color: white; padding: 8px; text-align: left; }
-    td { padding: 8px; border-bottom: 1px solid #eee; }
-    tr:nth-child(even) { background-color: #f9f9f9; }
-
-    /* Alertas */
-    .alerta-box { color: #856404; background-color: #fff3cd; border: 1px solid #ffeeba; padding: 10px; margin-top: 10px; border-radius: 4px; font-size: 12px; }
-    .badge-danger { color: #721c24; font-weight: bold; }
+    body { font-family: Helvetica; }
+    .header { text-align: center; border-bottom: 2px solid #333; margin-bottom: 20px; }
+    h1 { color: #0056b3; }
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+    th { background: #eee; padding: 5px; text-align: left; }
+    td { padding: 5px; border-bottom: 1px solid #ccc; }
+    .kpi-box { background: #f4f4f4; padding: 10px; display: inline-block; width: 30%; text-align: center; margin-right: 2%; }
+    .valor { font-size: 18px; font-weight: bold; display: block; }
 </style>
 </head>
 <body>
     <div class="header">
-        <h1>Informe Mensual de Gestión</h1>
-        <p class="meta">Sistema BI ModaOne | Generado por: {{ generado_por }} | {% now "d/m/Y H:i" %}</p>
+        <h1>Informe de Gestión Mensual</h1>
+        <p>Generado por: {{ generado_por }} | Fecha: {% now "d/m/Y" %}</p>
     </div>
 
-    <div class="kpi-container">
-        <div class="kpi-box">
-            <span class="kpi-title">Ventas Totales</span>
-            <span class="valor">${{ total_ventas|floatformat:0 }}</span>
-        </div>
-        <div class="kpi-box">
-            <span class="kpi-title">Pedidos Confirmados</span>
-            <span class="valor">{{ total_pedidos }}</span>
-        </div>
-        <div class="kpi-box">
-            <span class="kpi-title">Ticket Promedio</span>
-            <span class="valor">${{ ticket_promedio|floatformat:0 }}</span>
-        </div>
+    <div>
+        <div class="kpi-box">Ventas<span class="valor">${{ total_ventas|floatformat:0 }}</span></div>
+        <div class="kpi-box">Pedidos<span class="valor">{{ total_pedidos }}</span></div>
+        <div class="kpi-box">Ticket Promedio<span class="valor">${{ ticket_promedio|floatformat:0 }}</span></div>
     </div>
+    <br><br>
 
-    <h3>🔥 Top 5 Productos Más Vendidos</h3>
+    <h3>🔥 Top Productos Vendidos</h3>
     <table>
-        <tr>
-            <th style="width: 70%;">Producto</th>
-            <th style="width: 30%; text-align: right;">Unidades</th>
-        </tr>
+        <tr><th>Producto</th><th>Unidades</th></tr>
         {% for p in top_productos %}
-        <tr>
-            <td>{{ p.nombre_producto }}</td>
-            <td style="text-align: right;">{{ p.total_vendido }}</td>
-        </tr>
-        {% empty %}
-        <tr><td colspan="2">No hay ventas en este periodo.</td></tr>
+        <tr><td>{{ p.nombre_producto }}</td><td>{{ p.total_vendido }}</td></tr>
+        {% empty %}<tr><td colspan="2">Sin datos.</td></tr>
         {% endfor %}
     </table>
 
-    <h3>⚠️ Alertas de Inventario (Predicción IA)</h3>
-    {% if alertas_stock %}
-        <p style="font-size: 11px; color: #666;">Basado en el ritmo de ventas actual, estos productos se agotarán pronto:</p>
-        <table>
-            <tr>
-                <th>Producto Crítico</th>
-                <th style="text-align: center;">Stock Actual</th>
-                <th style="text-align: center;">Días Restantes</th>
-            </tr>
-            {% for a in alertas_stock %}
-            <tr>
-                <td>{{ a.producto }}</td>
-                <td style="text-align: center; font-weight: bold;">{{ a.stock }} un.</td>
-                <td style="text-align: center;" class="badge-danger">{{ a.dias }} días</td>
-            </tr>
-            {% endfor %}
-        </table>
-    {% else %}
-        <div class="alerta-box" style="background-color: #d4edda; color: #155724; border-color: #c3e6cb;">
-            ✅ Niveles de inventario saludables. No hay riesgo de quiebre de stock inmediato.
-        </div>
-    {% endif %}
-
-    <h3>☀️ Análisis Estacional (Histórico)</h3>
-    <table style="width: 60%;">
-        <tr>
-            <th>Temporada</th>
-            <th style="text-align: right;">Distribución de Ventas</th>
-        </tr>
-        <tr>
-            <td>Verano (Dic - Mar)</td>
-            <td style="text-align: right;">{{ estacionalidad.verano }}%</td>
-        </tr>
-        <tr>
-            <td>Invierno (Jun - Sep)</td>
-            <td style="text-align: right;">{{ estacionalidad.invierno }}%</td>
-        </tr>
-    </table>
-
-    <h3>👀 Interés en Probador Virtual</h3>
+    <h3>👀 Top Probador Virtual (Interés)</h3>
     <table>
-        <tr>
-            <th>Producto Probado</th>
-            <th style="text-align: right;">Intentos IA</th>
-        </tr>
+        <tr><th>Producto</th><th>Pruebas</th></tr>
         {% for t in top_tryon %}
-        <tr>
-            <td>{{ t.producto__nombre }}</td>
-            <td style="text-align: right;">{{ t.veces_probado }}</td>
-        </tr>
-        {% empty %}
-        <tr><td colspan="2">Sin actividad reciente en IA.</td></tr>
+        <tr><td>{{ t.producto__nombre }}</td><td>{{ t.veces_probado }}</td></tr>
+        {% empty %}<tr><td colspan="2">Sin datos.</td></tr>
         {% endfor %}
     </table>
-
 </body>
 </html>
