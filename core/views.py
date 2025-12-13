@@ -1,5 +1,3 @@
-# core/views.py
-
 import os
 import json
 import base64
@@ -33,10 +31,6 @@ from .models import Producto, Variante, Carrito, ItemCarrito, Direccion, Orden, 
 from .forms import ClienteRegistrationForm, DireccionForm
 
 
-from django.db.models.functions import ExtractMonth
-from django.utils import timezone
-import datetime
-
 # --- FUNCIONES AUXILIARES ---
 
 def is_staff_or_superuser(user):
@@ -47,7 +41,7 @@ def is_staff_or_superuser(user):
 
 def catalogo_digital(request):
     productos_list = Producto.objects.filter(activo=True).order_by('-fecha_creacion')
-    
+   
     query = request.GET.get('q')
     if query:
         productos_list = productos_list.filter(Q(nombre__icontains=query) | Q(descripcion__icontains=query))
@@ -55,7 +49,7 @@ def catalogo_digital(request):
     cat_filter = request.GET.get('categoria')
     if cat_filter:
         productos_list = productos_list.filter(categoria=cat_filter)
-        
+       
     marca_filter = request.GET.get('marca')
     if marca_filter:
         productos_list = productos_list.filter(marca=marca_filter)
@@ -65,7 +59,7 @@ def catalogo_digital(request):
     if min_price: productos_list = productos_list.filter(precio__gte=min_price)
     if max_price: productos_list = productos_list.filter(precio__lte=max_price)
 
-    paginator = Paginator(productos_list, 9) 
+    paginator = Paginator(productos_list, 9)
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
 
@@ -88,7 +82,7 @@ def registro_cliente(request):
             new_user = form.save(commit=False)
             new_user.set_password(form.cleaned_data['password'])
             new_user.save()
-            return redirect('home') 
+            return redirect('home')
     else:
         form = ClienteRegistrationForm()
     return render(request, 'core/registro.html', {'form': form, 'titulo': 'Registro'})
@@ -100,7 +94,7 @@ def agregar_al_carrito(request, variante_id):
 
         if cantidad > variante.stock:
             messages.error(request, f'Stock insuficiente. Disponible: {variante.stock}')
-            return redirect('home') 
+            return redirect('home')
 
         carrito, _ = Carrito.objects.get_or_create(usuario=request.user)
         item, created = ItemCarrito.objects.get_or_create(
@@ -112,7 +106,7 @@ def agregar_al_carrito(request, variante_id):
             item.save()
 
         messages.success(request, f'Añadido: {variante.producto.nombre}')
-        return redirect(request.META.get('HTTP_REFERER', 'home')) 
+        return redirect(request.META.get('HTTP_REFERER', 'home'))
 
     return redirect('login')
 
@@ -125,9 +119,9 @@ def agregar_desde_catalogo(request, producto_id):
         if not variante_id:
             messages.error(request, "Selecciona una talla.")
             return redirect('home')
-            
+           
         variante = get_object_or_404(Variante, id=variante_id)
-        
+       
         carrito, _ = Carrito.objects.get_or_create(usuario=request.user)
         item, created = ItemCarrito.objects.get_or_create(
             carrito=carrito, variante=variante,
@@ -136,7 +130,7 @@ def agregar_desde_catalogo(request, producto_id):
         if not created:
             item.cantidad += 1
             item.save()
-            
+           
         messages.success(request, "Producto añadido al carrito.")
         return redirect('home')
     return redirect('home')
@@ -169,7 +163,7 @@ def actualizar_cantidad(request, item_id):
             nueva = int(request.POST.get('cantidad'))
             if nueva <= 0: item.delete()
             elif nueva > item.variante.stock: messages.error(request, 'Stock insuficiente.')
-            else: 
+            else:
                 item.cantidad = nueva
                 item.save()
         except ValueError: pass
@@ -186,7 +180,7 @@ def checkout(request):
     except Carrito.DoesNotExist: return redirect('home')
 
     direcciones = Direccion.objects.filter(usuario=request.user).order_by('-predeterminada')
-    
+   
     if request.method == 'POST':
         form = DireccionForm(request.POST)
         if form.is_valid():
@@ -198,7 +192,7 @@ def checkout(request):
             return redirect('checkout')
     else:
         form = DireccionForm()
-    
+   
     costos = [{'id': 1, 'nombre': 'Courier Nacional', 'costo': 5990}, {'id': 2, 'nombre': 'Flash Local', 'costo': 3990}]
 
     return render(request, 'core/checkout.html', {
@@ -208,12 +202,12 @@ def checkout(request):
     })
 
 @login_required
-@transaction.atomic 
+@transaction.atomic
 def generar_orden(request):
     if request.method != 'POST': return redirect('checkout')
 
     direccion_id = request.POST.get('direccion_id')
-    metodo_envio = request.POST.get('metodo_envio') 
+    metodo_envio = request.POST.get('metodo_envio')
     email_contacto = request.POST.get('email_contacto')
 
     try:
@@ -239,7 +233,7 @@ def generar_orden(request):
         estado='PENDIENTE',
         direccion_envio=f"{direccion.calle} #{direccion.numero}, {direccion.comuna}",
     )
-    
+   
     for i in items:
         ItemOrden.objects.create(
             orden=orden, variante=i.variante, nombre_producto=i.variante.producto.nombre,
@@ -247,8 +241,8 @@ def generar_orden(request):
         )
         i.variante.stock -= i.cantidad
         i.variante.save()
-        
-    carrito.delete() 
+       
+    carrito.delete()
     return redirect('pasarela_pago', orden_id=orden.id)
 
 @login_required
@@ -263,12 +257,12 @@ def procesar_pago_real(request, orden_id):
     if request.method == 'POST':
         orden.estado = 'CONFIRMADO'
         orden.save()
-        
+       
         # Generar PDF
         html = render_to_string('core/invoice.html', {'orden': orden})
         pdf = BytesIO()
         pisa.CreatePDF(html, dest=pdf)
-        
+       
         # Enviar Email
         if orden.email:
             email = EmailMessage(
@@ -303,7 +297,7 @@ def mis_pedidos(request):
 
 # --- BACKOFFICE Y BI ---
 
-@user_passes_test(is_staff_or_superuser, login_url='staff_login') # <--- ESTO ES CRUCIAL
+@user_passes_test(is_staff_or_superuser, login_url='staff_login')
 def panel_admin_productos(request):
     return render(request, 'core/panel_admin.html', {'titulo': 'Panel Admin'})
 
@@ -312,13 +306,11 @@ def panel_admin_productos(request):
 def admin_ordenes(request):
     # Traemos las órdenes y optimizamos la consulta para traer los datos del usuario y sus direcciones
     ordenes = Orden.objects.select_related('usuario').prefetch_related('usuario__direcciones').all().order_by('-fecha_creacion')
-    
+   
     return render(request, 'core/panel_ordenes.html', {
-        'ordenes': ordenes, 
+        'ordenes': ordenes,
         'estados': ESTADOS_PEDIDO
     })
-
-# En core/views.py
 
 @login_required
 @user_passes_test(is_staff_or_superuser, login_url='staff_login')
@@ -327,27 +319,27 @@ def cambiar_estado_orden(request, orden_id):
         orden = get_object_or_404(Orden, id=orden_id)
         nuevo_estado = request.POST.get('nuevo_estado')
         tracking = request.POST.get('tracking_id')
-        
+       
         # Guardamos el estado anterior para verificar si cambió
         estado_anterior = orden.estado
-        
+       
         if nuevo_estado:
             orden.estado = nuevo_estado
             if tracking:
                 orden.codigo_seguimiento = tracking
             orden.save()
-            
+           
             # --- LÓGICA DE NOTIFICACIÓN POR CORREO ---
             if nuevo_estado != estado_anterior and orden.email:
                 asunto = f"Actualización de tu Orden #{orden.numero_orden}"
                 mensaje = ""
-                
+               
                 # Detectar tipo de envío (Flash vs Courier)
                 es_courier = int(orden.costo_envio) == 5990
-                
+               
                 if nuevo_estado == 'CONFIRMADO':
                     mensaje = f"Hola {orden.usuario.first_name}, tu pago está confirmado. Estamos preparando tu pedido."
-                
+               
                 elif nuevo_estado == 'DESPACHO':
                     if es_courier:
                         track_msg = f"Tu código de seguimiento es: {orden.codigo_seguimiento}" if orden.codigo_seguimiento else "Pronto recibirás tu código."
@@ -355,7 +347,7 @@ def cambiar_estado_orden(request, orden_id):
                     else:
                         # Mensaje Flash
                         mensaje = f"¡Tu pedido va en camino! Nuestro repartidor Flash ha salido a ruta hacia {orden.direccion_envio}."
-                
+               
                 elif nuevo_estado == 'ENTREGADO':
                     mensaje = f"¡Pedido Entregado! Gracias por comprar en ModaOne. Esperamos que lo disfrutes."
 
@@ -366,9 +358,9 @@ def cambiar_estado_orden(request, orden_id):
                         email.send()
                     except:
                         pass # No detener el sistema si falla el correo
-            
+           
             messages.success(request, f'Orden #{orden.numero_orden} actualizada a {orden.get_estado_display()}.')
-            
+           
     return redirect('admin_ordenes')
 
 @login_required
@@ -379,11 +371,10 @@ def dashboard_bi(request):
 
 @user_passes_test(is_staff_or_superuser, login_url='staff_login')
 def generar_reporte_gestion(request):
-    """Genera PDF de Gestión BI (Versión Mejorada con Estacionalidad)"""
+    """Genera PDF de Gestión BI"""
     fecha_fin = timezone.now()
     fecha_inicio = fecha_fin - timedelta(days=30)
 
-    # 1. Datos Básicos (Igual que antes)
     ordenes = Orden.objects.filter(fecha_creacion__range=(fecha_inicio, fecha_fin)).exclude(estado='CANCELADO')
     total_ventas = ordenes.aggregate(Sum('total_final'))['total_final__sum'] or 0
     total_pedidos = ordenes.count()
@@ -399,42 +390,20 @@ def generar_reporte_gestion(request):
         .annotate(veces_probado=Count('id')) \
         .order_by('-veces_probado')[:5]
 
-    # 2. NUEVO: Alertas de Stock (Cálculo real basado en ritmo de ventas)
-    alertas_stock = []
-    variantes_criticas = Variante.objects.filter(stock__lte=5, stock__gt=0)
-    for v in variantes_criticas:
-        ventas_mes = ItemOrden.objects.filter(variante=v, orden__fecha_creacion__gte=fecha_inicio).aggregate(sum=Sum('cantidad'))['sum'] or 0
-        if ventas_mes > 0:
-            ritmo = ventas_mes / 30
-            dias = int(v.stock / ritmo) if ritmo > 0 else 99
-            if dias < 15:
-                alertas_stock.append({'producto': f"{v.producto.nombre} ({v.talla})", 'stock': v.stock, 'dias': dias})
-
-    # 3. NUEVO: Estacionalidad (Histórica)
-    verano_total = ItemOrden.objects.filter(orden__fecha_creacion__month__in=[12, 1, 2, 3]).aggregate(s=Sum('cantidad'))['s'] or 0
-    invierno_total = ItemOrden.objects.filter(orden__fecha_creacion__month__in=[6, 7, 8, 9]).aggregate(s=Sum('cantidad'))['s'] or 0
-    
-    pct_verano, pct_invierno = 0, 0
-    if (verano_total + invierno_total) > 0:
-        pct_verano = round((verano_total / (verano_total + invierno_total)) * 100, 1)
-        pct_invierno = round((invierno_total / (verano_total + invierno_total)) * 100, 1)
-
     contexto = {
         'fecha_inicio': fecha_inicio, 'fecha_fin': fecha_fin,
         'total_ventas': total_ventas, 'total_pedidos': total_pedidos,
         'ticket_promedio': ticket_promedio, 'top_productos': top_productos,
-        'top_tryon': top_tryon, 'generado_por': request.user.username,
-        # Extras para el PDF si los usas
-        'alertas_stock': alertas_stock,
-        'estacionalidad': {'verano': pct_verano, 'invierno': pct_invierno}
+        'top_tryon': top_tryon, 'generado_por': request.user.username
     }
-    
+   
     html = render_to_string('core/reporte_bi_pdf.html', contexto)
     pdf = BytesIO()
     pisa.CreatePDF(html, dest=pdf)
     response = HttpResponse(pdf.getvalue(), content_type='application/pdf')
-    response['Content-Disposition'] = 'inline; filename="Informe_Gestion_BI.pdf"'
+    response['Content-Disposition'] = 'inline; filename="Informe_Gestion.pdf"'
     return response
+
 # --- IA TRY-ON (Replicate Real + Registro BI) ---
 
 @login_required
@@ -458,54 +427,45 @@ def procesar_ia_tryon(request):
     if request.method == 'POST':
         try:
             data = json.loads(request.body)
-            
+           
             # Datos para la IA
-            imagen_usuario = data.get('imagen_usuario') 
+            imagen_usuario = data.get('imagen_usuario')
             imagen_prenda = data.get('imagen_prenda')
             categoria = data.get('categoria', 'upper_body')
-            
-            # -----------------------------------------------------------
-            # 1. SEGURIDAD: CONEXIÓN CON RENDER (La corrección clave)
-            # -----------------------------------------------------------
-            # En lugar de escribir la clave aquí, le pedimos a Render que nos la de.
+           
+            # 1. SEGURIDAD: CONEXIÓN CON RENDER
             api_token = os.environ.get('REPLICATE_API_TOKEN')
-            
+           
             if not api_token:
-                # Si esto pasa, es porque olvidamos poner la variable en el panel de Render
                 return JsonResponse({'status': 'error', 'message': 'Falta configurar el Token en el servidor'}, status=500)
 
             # Inicializamos el cliente con la clave segura
             client = replicate.Client(api_token=api_token)
 
-            # -----------------------------------------------------------
-            # 2. EJECUTAR IA (Tu modelo específico)
-            # -----------------------------------------------------------
+            # 2. EJECUTAR IA
             output = client.run(
                 "cuuupid/idm-vton:c871bb9b046607b680449ecbae55fd8c6d945e0a1948644bf2361b3d021d3ff4",
                 input={
-                    "human_img": imagen_usuario, 
-                    "garm_img": imagen_prenda, 
-                    "garment_des": "clothing", 
-                    "category": categoria, 
-                    "crop": False, 
-                    "seed": 42, 
+                    "human_img": imagen_usuario,
+                    "garm_img": imagen_prenda,
+                    "garment_des": "clothing",
+                    "category": categoria,
+                    "crop": False,
+                    "seed": 42,
                     "steps": 30
                 }
             )
-            
-            # Replicate devuelve una lista o un string, aseguramos que sea string url
+           
+            # Replicate devuelve una lista o un string
             final_image_url = str(output[0] if isinstance(output, list) else output)
 
-            # -----------------------------------------------------------
-            # 3. GUARDAR EL REGISTRO BI (Tu lógica intacta)
-            # -----------------------------------------------------------
+            # 3. GUARDAR EL REGISTRO BI
             try:
                 prod_id = data.get('producto_id')
                 if prod_id:
                     producto_obj = Producto.objects.get(id=prod_id)
-                    
                     usuario_log = request.user if request.user.is_authenticated else None
-                    
+                   
                     RegistroTryOn.objects.create(
                         producto=producto_obj,
                         usuario=usuario_log
@@ -513,7 +473,6 @@ def procesar_ia_tryon(request):
                     print(f"✅ BI Registrado: Se probó {producto_obj.nombre}")
             except Exception as e:
                 print(f"⚠️ Error guardando BI: {e}")
-                # No detenemos el proceso si falla el BI, solo avisamos en consola
 
             return JsonResponse({'status': 'success', 'imagen_generada': final_image_url})
 
@@ -522,14 +481,11 @@ def procesar_ia_tryon(request):
             return JsonResponse({'status': 'error', 'message': f'Error interno: {str(e)}'}, status=500)
 
     return JsonResponse({'status': 'error', 'message': 'Método no permitido'}, status=405)
-# --- AGREGAR AL FINAL DE core/views.py ---
-
-# --- EN core/views.py (Al final) ---
 
 def staff_login_view(request):
     # Si ya es admin, mándalo directo al panel
     if request.user.is_authenticated and is_staff_or_superuser(request.user):
-        return redirect('panel_admin') 
+        return redirect('panel_admin')
 
     if request.method == 'POST':
         usuario = request.POST.get('username')
@@ -539,17 +495,13 @@ def staff_login_view(request):
         if user is not None:
             if is_staff_or_superuser(user):
                 login(request, user)
-                return redirect('panel_admin') # <--- Esto fuerza la entrada al dashboard
+                return redirect('panel_admin')
             else:
                 messages.error(request, "No tienes permisos de acceso corporativo.")
         else:
             messages.error(request, "Credenciales inválidas.")
-    
+   
     return render(request, 'core/staff_login.html')
-
-# --- En core/views.py ---
-
-# --- En core/views.py ---
 
 @login_required
 @user_passes_test(is_staff_or_superuser, login_url='staff_login')
@@ -557,7 +509,6 @@ def panel_clientes(request):
     """
     CRM de Clientes: Segmentación por comportamiento de compra y uso de IA.
     """
-    # 1. Obtener métricas base de la base de datos
     clientes = User.objects.filter(is_staff=False).annotate(
         total_gastado=Sum('orden__total_final', filter=Q(orden__estado__in=['CONFIRMADO', 'DESPACHO', 'ENTREGADO'])),
         total_ordenes=Count('orden', filter=Q(orden__estado__in=['CONFIRMADO', 'DESPACHO', 'ENTREGADO'])),
@@ -568,19 +519,16 @@ def panel_clientes(request):
     today = timezone.now().date()
 
     for c in clientes:
-        # 2. Calcular días de inactividad
         ultima_orden = Orden.objects.filter(usuario=c).order_by('-fecha_creacion').first()
         dias_sin_compra = (today - ultima_orden.fecha_creacion.date()).days if ultima_orden else None
-        
-        # 3. Definir Perfil (Scoring)
+       
         perfil = "Nuevo"
         color = "secondary"
-        
+       
         gasto = c.total_gastado or 0
         ordenes = c.total_ordenes or 0
         uso_ia = c.veces_ia or 0
-        
-        # Lógica de Segmentación
+       
         if gasto > 50000 or ordenes >= 3:
             perfil = "💎 VIP"
             color = "info"
@@ -594,19 +542,16 @@ def panel_clientes(request):
             perfil = "✅ Cliente"
             color = "success"
 
-        # 4. CÁLCULO SEGURO DE LA BARRA DE PROGRESO (0 a 100)
-        # Cada uso de IA suma 10%. Máximo 100%.
         porcentaje_calc = uso_ia * 10
         if porcentaje_calc > 100:
             porcentaje_calc = 100
-        
-        # Guardamos todo en un diccionario limpio
+       
         lista_clientes.append({
             'usuario': c,
             'gasto': gasto,
             'ordenes': ordenes,
             'uso_ia': uso_ia,
-            'porcentaje_ia': porcentaje_calc, # <--- Variable numérica lista para usar
+            'porcentaje_ia': porcentaje_calc,
             'dias_inactivo': dias_sin_compra,
             'perfil': perfil,
             'color': color,
@@ -614,84 +559,3 @@ def panel_clientes(request):
         })
 
     return render(request, 'core/panel_clientes.html', {'clientes': lista_clientes})
-
-@login_required
-@user_passes_test(is_staff_or_superuser, login_url='staff_login')
-def dashboard_expansion(request):
-    """
-    Vista dedicada a la Expansión de Negocio y Análisis Temporal.
-    USA DATOS REALES DE LA BASE DE DATOS.
-    """
-    filtro = request.GET.get('filtro', 'mes') # Por defecto: Este Mes
-    
-    hoy = timezone.now()
-    inicio = None
-    fin = hoy
-    titulo_periodo = "Análisis General"
-
-    # --- 1. LÓGICA DE FECHAS REALES ---
-    if filtro == 'semana':
-        inicio = hoy - timedelta(days=7)
-        titulo_periodo = "Últimos 7 Días"
-    
-    elif filtro == 'mes':
-        inicio = hoy - timedelta(days=30)
-        titulo_periodo = "Últimos 30 Días"
-    
-    elif filtro == 'trimestre':
-        inicio = hoy - timedelta(days=90)
-        titulo_periodo = "Último Trimestre"
-        
-    elif filtro == 'semestre1':
-        # Primer Semestre del año actual (Ene - Jun)
-        inicio = hoy.replace(month=1, day=1, hour=0, minute=0, second=0)
-        fin = hoy.replace(month=6, day=30, hour=23, minute=59, second=59)
-        titulo_periodo = f"Primer Semestre {hoy.year}"
-        
-    elif filtro == 'semestre2':
-        # Segundo Semestre del año actual (Jul - Dic)
-        inicio = hoy.replace(month=7, day=1, hour=0, minute=0, second=0)
-        fin = hoy.replace(month=12, day=31, hour=23, minute=59, second=59)
-        titulo_periodo = f"Segundo Semestre {hoy.year}"
-        
-    elif filtro == 'anio':
-        inicio = hoy.replace(month=1, day=1, hour=0, minute=0)
-        titulo_periodo = f"Año {hoy.year}"
-
-    # --- 2. CONSULTA SQL A LA BASE DE DATOS (REAL) ---
-    # Filtramos los items vendidos dentro del rango de fechas seleccionado
-    items_vendidos = ItemOrden.objects.filter(
-        orden__estado__in=['CONFIRMADO', 'DESPACHO', 'ENTREGADO'] # Solo ventas reales confirmadas
-    )
-    
-    if inicio:
-        items_vendidos = items_vendidos.filter(orden__fecha_creacion__range=(inicio, fin))
-
-    # Agrupamos por nombre de producto y sumamos cantidades
-    # Esto le dice a la DB: "Dime qué prenda exacta se vendió más en estas fechas"
-    ranking_productos = items_vendidos.values(
-        'variante__producto__nombre', 
-        'variante__producto__categoria'
-    ).annotate(
-        total_unidades=Sum('cantidad'),
-        dinero_generado=Sum('subtotal') # Ojo: Asegúrate que tu modelo ItemOrden tenga precio o subtotal
-    ).order_by('-total_unidades')
-
-    # --- 3. ANÁLISIS ESTACIONAL (EXTRACCIÓN DE DATOS REALES) ---
-    # Analizamos TODO el historial para ver tendencias de Invierno vs Verano
-    todas_ventas = ItemOrden.objects.filter(orden__estado__in=['CONFIRMADO', 'ENTREGADO'])
-    
-    # Verano: Enero(1), Febrero(2), Marzo(3), Diciembre(12)
-    venta_verano = todas_ventas.filter(orden__fecha_creacion__month__in=[1, 2, 3, 12]).count()
-    
-    # Invierno: Junio(6), Julio(7), Agosto(8), Septiembre(9)
-    venta_invierno = todas_ventas.filter(orden__fecha_creacion__month__in=[6, 7, 8, 9]).count()
-
-    contexto = {
-        'ranking': ranking_productos,
-        'filtro_actual': filtro,
-        'titulo': titulo_periodo,
-        'stats_clima': {'verano': venta_verano, 'invierno': venta_invierno}
-    }
-    
-    return render(request, 'core/dashboard_expansion.html', contexto)
