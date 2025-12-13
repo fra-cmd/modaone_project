@@ -61,7 +61,7 @@
             </div>
         </div>
     </div>
-   
+    
     <div class="col-md-4">
         <div class="card shadow-sm h-100">
             <div class="card-header fw-bold">
@@ -105,15 +105,15 @@
     async function cargarDatosBI() {
         try {
             const response = await fetch('/api/v1/dashboard-kpi/');
-           
+            
             if (response.ok) {
                 const data = await response.json();
-               
+                
                 // 1. Llenar KPIs (Tarjetas de colores)
                 document.getElementById('bi-ventas').innerText = '$' + parseInt(data.total_ventas).toLocaleString('es-CL');
                 document.getElementById('bi-ordenes').innerText = data.total_ordenes;
                 document.getElementById('bi-stock').innerText = data.bajo_stock;
-               
+                
                 const ticket = data.total_ordenes > 0 ? Math.round(data.total_ventas / data.total_ordenes) : 0;
                 document.getElementById('bi-ticket').innerText = '$' + ticket.toLocaleString('es-CL');
 
@@ -135,30 +135,33 @@
                     });
                 }
 
-                // 3. Gráfico de Estados
+                // 3. Gráfico de Estados (Estático por ahora, para visualización)
                 const ctxEstados = document.getElementById('chartEstados').getContext('2d');
                 new Chart(ctxEstados, {
                     type: 'doughnut',
                     data: {
                         labels: ['Entregado', 'En Despacho', 'Confirmado', 'Pendiente'],
                         datasets: [{
-                            data: [data.total_ordenes, 2, 1, 0],
+                            data: [data.total_ordenes, 2, 1, 0], // Ejemplo visual dinámico
                             backgroundColor: ['#198754', '#0dcaf0', '#ffc107', '#6c757d']
                         }]
                     }
                 });
-               
-                // 4. Llenar Tabla Try-On
+                
+                // 4. Llenar Tabla Try-On (CON DATOS REALES AHORA)
                 const tbody = document.getElementById('tabla-tryon');
                 tbody.innerHTML = '';
-               
+                
                 if (data.top_tryon && data.top_tryon.length > 0) {
                     data.top_tryon.forEach(item => {
+                        // Usamos los datos que calculó Python
                         const conversion = item.tasa_conversion;
+                        
+                        // Lógica de colores para el negocio
                         let color = 'text-muted';
-                        if(conversion >= 20) color = 'text-success fw-bold';
-                        if(conversion < 5) color = 'text-danger fw-bold';
-                       
+                        if(conversion >= 20) color = 'text-success fw-bold'; // ¡Éxito!
+                        if(conversion < 5) color = 'text-danger fw-bold';    // ¡Alerta! Se prueba mucho pero no se vende
+                        
                         tbody.innerHTML += `
                             <tr>
                                 <td>${item.producto__nombre}</td>
