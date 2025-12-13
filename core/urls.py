@@ -57,4 +57,5 @@ urlpatterns = [
     path('api/registrar-tryon/', views.registrar_evento_tryon, name='registrar_tryon'),
 
     path('admin-panel/clientes/', views.panel_clientes, name='panel_clientes'),
+    path('admin-panel/estrategia/', views.dashboard_expansion, name='dashboard_expansion'),
 ]

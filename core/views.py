@@ -516,3 +516,91 @@ def panel_clientes(request):
         })
 
     return render(request, 'core/panel_clientes.html', {'clientes': lista_clientes})
+
+
+# --- AGREGAR AL FINAL DE core/views.py ---
+
+@login_required
+@user_passes_test(is_staff_or_superuser, login_url='staff_login')
+def dashboard_expansion(request):
+    """
+    PÁGINA 2: Expansión de Negocio (Lo que pidió el profe).
+    Filtra ventas reales por periodos específicos y analiza clima.
+    """
+    filtro = request.GET.get('filtro', 'mes') # Por defecto muestra el último mes
+    
+    hoy = timezone.now()
+    inicio = None
+    fin = hoy
+    titulo_periodo = "Análisis General"
+
+    # --- 1. LÓGICA DE FILTROS DE TIEMPO (Expandir la mente) ---
+    if filtro == 'semana':
+        inicio = hoy - timedelta(days=7)
+        titulo_periodo = "Última Semana"
+    
+    elif filtro == 'mes':
+        inicio = hoy - timedelta(days=30)
+        titulo_periodo = "Último Mes"
+    
+    elif filtro == 'trimestre':
+        inicio = hoy - timedelta(days=90)
+        titulo_periodo = "Último Trimestre"
+        
+    elif filtro == 'semestre1':
+        # Primer Semestre del año actual (Ene - Jun)
+        inicio = hoy.replace(month=1, day=1, hour=0, minute=0)
+        fin = hoy.replace(month=6, day=30, hour=23, minute=59)
+        titulo_periodo = f"Primer Semestre {hoy.year}"
+        
+    elif filtro == 'semestre2':
+        # Segundo Semestre del año actual (Jul - Dic)
+        inicio = hoy.replace(month=7, day=1, hour=0, minute=0)
+        fin = hoy.replace(month=12, day=31, hour=23, minute=59)
+        titulo_periodo = f"Segundo Semestre {hoy.year}"
+        
+    elif filtro == 'anio':
+        inicio = hoy.replace(month=1, day=1, hour=0, minute=0)
+        titulo_periodo = f"Año {hoy.year}"
+
+    # --- 2. CONSULTA DE RANKING (Qué prenda se vende más) ---
+    items_vendidos = ItemOrden.objects.filter(
+        orden__estado__in=['CONFIRMADO', 'DESPACHO', 'ENTREGADO']
+    )
+    
+    if inicio:
+        items_vendidos = items_vendidos.filter(orden__fecha_creacion__range=(inicio, fin))
+
+    # Agrupamos para saber cuál es la prenda ganadora
+    ranking = items_vendidos.values('variante__producto__nombre')\
+        .annotate(total=Sum('cantidad'))\
+        .order_by('-total')
+
+    # --- 3. ESTACIONALIDAD (Invierno vs Verano) ---
+    # Analizamos TODO el historial para ver patrones
+    todas = ItemOrden.objects.filter(orden__estado__in=['CONFIRMADO', 'DESPACHO', 'ENTREGADO'])
+    
+    # Verano: Dic, Ene, Feb, Mar
+    ventas_verano = todas.filter(orden__fecha_creacion__month__in=[12, 1, 2, 3]).count()
+    # Invierno: Jun, Jul, Ago, Sep
+    ventas_invierno = todas.filter(orden__fecha_creacion__month__in=[6, 7, 8, 9]).count()
+    
+    # --- 4. ALERTAS DE REPOSICIÓN (Predicción simple) ---
+    # Productos con poco stock que se han vendido recientemente
+    alertas = []
+    bajos = Variante.objects.filter(stock__lte=5, stock__gt=0)
+    for b in bajos:
+        # Vemos si se vendió en los últimos 30 días
+        v = ItemOrden.objects.filter(variante=b, orden__fecha_creacion__gte=hoy-timedelta(days=30)).count()
+        if v > 0:
+            alertas.append(b)
+
+    contexto = {
+        'ranking': ranking,
+        'filtro_actual': filtro,
+        'titulo': titulo_periodo,
+        'clima': {'verano': ventas_verano, 'invierno': ventas_invierno},
+        'alertas': alertas
+    }
+    
+    return render(request, 'core/dashboard_expansion.html', contexto)

@@ -1,0 +1,135 @@
+{% extends 'base_admin.html' %}
+{% load humanize %}
+
+{% block title %}Estrategia de Expansión | ModaOne{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">Estrategia y Expansión (Página 2)</h1>
+    <a href="{% url 'dashboard_bi' %}" class="btn btn-outline-secondary btn-sm">
+        <i class="fas fa-arrow-left"></i> Volver a KPIs Generales
+    </a>
+</div>
+
+<div class="alert alert-info shadow-sm">
+    <form method="GET" class="row align-items-center">
+        <div class="col-auto fw-bold">
+            <i class="fas fa-calendar-alt"></i> Analizar Ventas de:
+        </div>
+        <div class="col-auto">
+            <select name="filtro" class="form-select form-select-sm" onchange="this.form.submit()">
+                <option value="semana" {% if filtro_actual == 'semana' %}selected{% endif %}>Última Semana</option>
+                <option value="mes" {% if filtro_actual == 'mes' %}selected{% endif %}>Último Mes</option>
+                <option value="trimestre" {% if filtro_actual == 'trimestre' %}selected{% endif %}>Último Trimestre</option>
+                <option value="semestre1" {% if filtro_actual == 'semestre1' %}selected{% endif %}>1er Semestre (Ene-Jun)</option>
+                <option value="semestre2" {% if filtro_actual == 'semestre2' %}selected{% endif %}>2do Semestre (Jul-Dic)</option>
+                <option value="anio" {% if filtro_actual == 'anio' %}selected{% endif %}>Año Actual</option>
+            </select>
+        </div>
+        <div class="col-auto text-muted small">
+            Viendo datos reales de: <strong>{{ titulo }}</strong>
+        </div>
+    </form>
+</div>
+
+<div class="row">
+    <div class="col-md-7">
+        <div class="card shadow-sm mb-4">
+            <div class="card-header bg-dark text-white fw-bold">
+                <i class="fas fa-trophy text-warning"></i> Ranking de Prendas ({{ titulo }})
+            </div>
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Prenda</th>
+                            <th class="text-center">Cant. Vendida</th>
+                            <th>Estado</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in ranking %}
+                        <tr>
+                            <td class="fw-bold">{{ item.variante__producto__nombre }}</td>
+                            <td class="text-center" style="font-size: 1.2em;">{{ item.total }}</td>
+                            <td>
+                                {% if forloop.first %}
+                                    <span class="badge bg-warning text-dark">🔥 Top #1</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">Venta Regular</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="3" class="text-center py-4 text-muted">
+                                No se registraron ventas confirmadas en este periodo.
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-5">
+        <div class="card shadow-sm mb-4">
+            <div class="card-header fw-bold bg-primary text-white">
+                <i class="fas fa-cloud-sun"></i> Inteligencia Estacional
+            </div>
+            <div class="card-body">
+                <p class="small text-muted mb-3">Comparamos tus ventas históricas para saber en qué estación vendes más.</p>
+                
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <span>☀️ Verano (Dic-Mar)</span>
+                    <span class="fw-bold">{{ clima.verano }} ventas</span>
+                </div>
+                <div class="progress mb-3" style="height: 10px;">
+                    <div class="progress-bar bg-warning" role="progressbar" style="width: {{ clima.verano }}0px;"></div>
+                </div>
+
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <span>❄️ Invierno (Jun-Sep)</span>
+                    <span class="fw-bold">{{ clima.invierno }} ventas</span>
+                </div>
+                <div class="progress mb-3" style="height: 10px;">
+                    <div class="progress-bar bg-info" role="progressbar" style="width: {{ clima.invierno }}0px;"></div>
+                </div>
+
+                <div class="alert alert-light border mt-3 small">
+                    <strong>Conclusión:</strong>
+                    {% if clima.verano > clima.invierno %}
+                        Tu negocio es fuerte en <strong>Verano</strong>. Asegura stock de poleras antes de Diciembre.
+                    {% elif clima.invierno > clima.verano %}
+                        Tu negocio es fuerte en <strong>Invierno</strong>. Compra parkas y polerones en Mayo.
+                    {% else %}
+                        Tus ventas son estables todo el año.
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <div class="card shadow-sm border-danger">
+            <div class="card-header bg-danger text-white fw-bold">
+                <i class="fas fa-exclamation-triangle"></i> Reposición Urgente
+            </div>
+            <ul class="list-group list-group-flush">
+                {% for item in alertas %}
+                <li class="list-group-item d-flex justify-content-between align-items-center">
+                    <div>
+                        <strong>{{ item.producto.nombre }}</strong> <br>
+                        <small class="text-muted">Talla: {{ item.talla }} | Color: {{ item.color }}</small>
+                    </div>
+                    <span class="badge bg-danger rounded-pill">Quedan {{ item.stock }}</span>
+                </li>
+                {% empty %}
+                <li class="list-group-item text-success">
+                    <i class="fas fa-check-circle"></i> Stock saludable. No hay urgencias.
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
+    </div>
+</div>
+{% endblock %}
