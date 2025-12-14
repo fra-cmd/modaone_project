@@ -670,4 +670,29 @@ def dashboard_expansion(request):
     
     return render(request, 'core/dashboard_expansion.html', contexto)
 
+@login_required
+def cancelar_orden(request, orden_id):
+    """
+    Permite al usuario cancelar una orden PENDIENTE y devuelve el stock.
+    """
+    orden = get_object_or_404(Orden, id=orden_id, usuario=request.user)
+    
+    # Solo permitimos cancelar si no se ha pagado aún
+    if orden.estado == 'PENDIENTE':
+        # 1. Devolver el stock a cada producto
+        items = ItemOrden.objects.filter(orden=orden)
+        for item in items:
+            variante = item.variante
+            variante.stock += item.cantidad
+            variante.save()
+        
+        # 2. Marcar como cancelado
+        orden.estado = 'CANCELADO'
+        orden.save()
+        messages.success(request, f"Orden #{orden.numero_orden} cancelada. Stock restaurado.")
+    else:
+        messages.error(request, "No se puede cancelar una orden ya procesada.")
+    
+    return redirect('mis_pedidos')
+
 

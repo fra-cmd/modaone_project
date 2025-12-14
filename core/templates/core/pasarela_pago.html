@@ -14,13 +14,13 @@
                 <div class="card-body p-4">
                     <div class="text-center mb-4">
                         <h6 class="text-muted">Orden #{{ orden.numero_orden }}</h6>
-                        <h1 class="display-4 fw-bold text-dark">${{ orden.total_final|intcomma }}</h1>
+                        <h1 class="display-4 fw-bold text-dark">${{ orden.total_final|intcomma }} <small class="fs-6 text-muted">CLP</small></h1>
                         <p class="small text-muted">Total a pagar (Incluye envío)</p>
                     </div>
 
                     <div class="alert alert-info small">
-                        <i class="fas fa-info-circle"></i> Modo Sandbox (Prueba). 
-                        Usa la cuenta "Personal" de PayPal Developer para pagar.
+                        <i class="fas fa-info-circle"></i> <strong>Modo Sandbox:</strong> 
+                        El monto se convertirá a USD automáticamente para procesar el pago.
                     </div>
 
                     <div id="paypal-button-container"></div>
@@ -41,9 +41,17 @@
 <script src="https://www.paypal.com/sdk/js?client-id=AS8sUhI58SQ-8pLQau92uUOjTNPBOk5ZWBmg2JNFzZC-mtJjS3lfbQ0i05RGn5iFMK8KG80kWKopT5pf&currency=USD"></script>
 
 <script>
-    // NOTA: PayPal Sandbox trabaja en USD por defecto. 
-    // Pasamos el valor numérico directo.
-    const montoPagar = "{{ orden.total_final }}"; 
+    // 1. OBTENER VALOR EN PESOS (CLP)
+    // El filtro |stringformat:"d" asegura que sea solo número sin comas
+    const montoCLP = parseInt("{{ orden.total_final|stringformat:'d' }}");
+    
+    // 2. CONVERTIR A DÓLARES (USD)
+    // Usamos una tasa fija aproximada (ej: 980 pesos = 1 dólar)
+    const tasaCambio = 980; 
+    const montoUSD = (montoCLP / tasaCambio).toFixed(2); // Dejamos solo 2 decimales
+
+    // Mostramos en consola para verificar
+    console.log(`Conversión: $${montoCLP} CLP son aprox $${montoUSD} USD`);
 
     paypal.Buttons({
         style: {
@@ -53,13 +61,13 @@
             label: 'pay',
         },
 
-        // 1. Crear la orden en PayPal
+        // 1. Crear la orden en PayPal CON EL MONTO EN DÓLARES
         createOrder: function(data, actions) {
             return actions.order.create({
                 purchase_units: [{
                     description: "Orden ModaOne #{{ orden.numero_orden }}",
                     amount: {
-                        value: montoPagar
+                        value: montoUSD // <--- AQUÍ ENVIAMOS EL VALOR CONVERTIDO
                     }
                 }]
             });
@@ -67,15 +75,12 @@
 
         // 2. Si el usuario paga correctamente
         onApprove: function(data, actions) {
-            // Ocultamos el botón y mostramos "Cargando..."
             document.getElementById('paypal-button-container').style.display = 'none';
             document.getElementById('mensaje-procesando').style.display = 'block';
 
             return actions.order.capture().then(function(details) {
                 console.log('Pago completado por ' + details.payer.name.given_name);
-                
-                // REDIRECCIÓN AUTOMÁTICA A DJANGO
-                // Esto lleva a la vista que genera la boleta y manda el correo
+                // REDIRECCIÓN AUTOMÁTICA
                 window.location.href = "{% url 'procesar_pago_real' orden.id %}";
             });
         },

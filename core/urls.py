@@ -38,7 +38,7 @@ urlpatterns = [
     path('orden/pago-simulado/<int:orden_id>/', views.pago_simulado, name='pago_simulado'),
     path('orden/descargar/<int:orden_id>/', views.descargar_boleta, name='descargar_boleta'),
     path('mis-pedidos/', views.mis_pedidos, name='mis_pedidos'),
-
+    path('orden/cancelar/<int:orden_id>/', views.cancelar_orden, name='cancelar_orden'),
     # --- 4. PANEL DE ADMINISTRACIÓN (BACKOFFICE) ---
     # La seguridad @user_passes_test ya está en views.py, no es necesario repetirla aquí
     path('admin-panel/', views.panel_admin_productos, name='panel_admin'),
