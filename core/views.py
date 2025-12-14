@@ -329,6 +329,11 @@ def procesar_pago_real(request, orden_id):
     return render(request, 'core/orden_confirmada.html', {'orden': orden})
 
 @login_required
+def pago_simulado(request, orden_id):
+    # Esta función redirige al usuario a la pasarela real
+    return redirect('pasarela_pago', orden_id=orden_id)
+
+@login_required
 def descargar_boleta(request, orden_id):
     orden = get_object_or_404(Orden, id=orden_id, usuario=request.user)
     html = render_to_string('core/invoice.html', {'orden': orden})
